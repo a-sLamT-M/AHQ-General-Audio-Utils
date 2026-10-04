@@ -6,11 +6,10 @@ SaturatorEditor::SaturatorEditor(SaturatorProcessor &owner)
       display(owner.getAnalysis()) {
     setSize(660, 610);
     constexpr std::array<const char *, 4> names{"Drive", "Bias", "Tone", "Wet mix (0-1)"};
-    constexpr std::array<double, 4> minimum{0, -1, -1, 0}, maximum{36, 1, 1, 1};
+    constexpr std::array<const char *, 4> suffixes{" dB", "", "", ""};
     constexpr std::array<int, 4> indices{1, 2, 3, 5};
     for (int index = 0; index < 4; ++index) {
-        configureSlider(sliders[size_t(index)], indices[size_t(index)], minimum[size_t(index)],
-                        maximum[size_t(index)], index == 0 ? " dB" : "");
+        configureSlider(sliders[size_t(index)], indices[size_t(index)], suffixes[size_t(index)]);
         labels[size_t(index)].setText(names[size_t(index)], juce::dontSendNotification);
         addAndMakeVisible(labels[size_t(index)]);
     }
@@ -87,17 +86,17 @@ void SaturatorEditor::updateSpectrumVisibility() {
         stopTimer();
 }
 
-void SaturatorEditor::configureSlider(juce::Slider &slider, int index, double minimum,
-                                      double maximum, const juce::String &suffix) {
+void SaturatorEditor::configureSlider(juce::Slider &slider, int index, const juce::String &suffix) {
     addAndMakeVisible(slider);
     slider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
     slider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 120, 26);
-    slider.setRange(minimum, maximum);
     slider.setTextValueSuffix(suffix);
     slider.setNumDecimalPlacesToDisplay(index == 1 ? 1 : 3);
     constexpr std::array<const char *, 6> ids{"model", "drive",        "bias",
                                               "tone",  "oversampling", "mix"};
     auto *parameter = processor.getParameters().getParameter(ids[size_t(index)]);
+    const auto &range = parameter->getNormalisableRange();
+    slider.setRange(range.start, range.end, range.interval);
     slider.onDragStart = [this, parameter] {
         dragBefore = processor.readValues();
         dragging = true;

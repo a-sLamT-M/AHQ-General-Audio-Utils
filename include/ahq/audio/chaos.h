@@ -1,5 +1,7 @@
 #pragma once
 
+#include "ahq/audio/parameterRange.h"
+
 #include "ahq/audio/linearSmoother.h"
 
 #include <array>
@@ -20,6 +22,17 @@ struct ChaosParameters {
     float distortionProbability = 0.0F;
     std::uint32_t seed = 1;
     float mix = 1.0F;
+
+    static constexpr ParameterRange sliceMsRange{10, 250};
+    static constexpr ParameterRange probabilityRange{0, 1};
+    static constexpr ParameterRange repeatsRange{1, 8, 1};
+    static constexpr ParameterRange reverseProbabilityRange{0, 1};
+    static constexpr ParameterRange pitchRangeSemitonesRange{0, 24};
+    static constexpr ParameterRange panAmountRange{0, 1};
+    static constexpr ParameterRange driveDbRange{0, 36};
+    static constexpr ParameterRange distortionProbabilityRange{0, 1};
+    static constexpr ParameterRange mixRange{0, 1};
+    [[nodiscard]] bool isValid() const noexcept;
 };
 
 /// Reproducible past-slice repetition/reversal/pitch/pan/distortion. Calls use one thread.

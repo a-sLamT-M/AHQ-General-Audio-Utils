@@ -6,22 +6,13 @@
 #include <numbers>
 
 namespace ahq::audio {
-namespace {
 
-bool validParameters(const SpaceLabParameters &parameters) noexcept {
-    return std::isfinite(parameters.width) && parameters.width >= 0.0F &&
-           parameters.width <= 3.0F && std::isfinite(parameters.signedHaasMs) &&
-           parameters.signedHaasMs >= -30.0F && parameters.signedHaasMs <= 30.0F &&
-           std::isfinite(parameters.leftTiltDb) && parameters.leftTiltDb >= -12.0F &&
-           parameters.leftTiltDb <= 12.0F && std::isfinite(parameters.rightTiltDb) &&
-           parameters.rightTiltDb >= -12.0F && parameters.rightTiltDb <= 12.0F &&
-           std::isfinite(parameters.modRateHz) && parameters.modRateHz >= 0.0F &&
-           parameters.modRateHz <= 10.0F && std::isfinite(parameters.modDepthMs) &&
-           parameters.modDepthMs >= 0.0F && parameters.modDepthMs <= 20.0F &&
-           std::isfinite(parameters.mix) && parameters.mix >= 0.0F && parameters.mix <= 1.0F;
+bool SpaceLabParameters::isValid() const noexcept {
+    return widthRange.contains(width) && signedHaasMsRange.contains(signedHaasMs) &&
+           leftTiltDbRange.contains(leftTiltDb) && rightTiltDbRange.contains(rightTiltDb) &&
+           modRateHzRange.contains(modRateHz) && modDepthMsRange.contains(modDepthMs) &&
+           mixRange.contains(mix);
 }
-
-} // namespace
 
 bool SpaceLab::prepare(double sampleRate) noexcept {
     if (!std::isfinite(sampleRate) || sampleRate < 8000.0 || sampleRate > 384000.0) {
@@ -45,7 +36,7 @@ bool SpaceLab::prepare(double sampleRate) noexcept {
 }
 
 bool SpaceLab::setParameters(const SpaceLabParameters &parameters) noexcept {
-    if (transitionFrames_ == 0 || !validParameters(parameters)) {
+    if (transitionFrames_ == 0 || !parameters.isValid()) {
         return false;
     }
     parameters_ = parameters;

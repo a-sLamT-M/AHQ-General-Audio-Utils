@@ -5,11 +5,11 @@ QuickFilterEditor::QuickFilterEditor(QuickFilterProcessor &owner)
     : AudioProcessorEditor(owner), ComponentMovementWatcher(this), processor(owner),
       display(owner.getAnalysis()) {
     setSize(660, 610);
-    configureSlider(frequency, 1, 20, 20000, " Hz");
+    configureSlider(frequency, 1, " Hz");
     frequency.setSkewFactorFromMidPoint(1000);
-    configureSlider(q, 2, 0.1, 10, "");
+    configureSlider(q, 2, "");
     q.setTooltip("Q controls the first filter section; later sections use Q = 0.707.");
-    configureSlider(mix, 4, 0, 1, "");
+    configureSlider(mix, 4, "");
     frequencyLabel.setText("Frequency", juce::dontSendNotification);
     qLabel.setText("Q", juce::dontSendNotification);
     mixLabel.setText("Wet mix (0-1)", juce::dontSendNotification);
@@ -80,17 +80,17 @@ void QuickFilterEditor::updateSpectrumVisibility() {
         stopTimer();
 }
 
-void QuickFilterEditor::configureSlider(juce::Slider &slider, int index, double minimum,
-                                        double maximum, const juce::String &suffix) {
+void QuickFilterEditor::configureSlider(juce::Slider &slider, int index,
+                                        const juce::String &suffix) {
     addAndMakeVisible(slider);
     slider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
     slider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 120, 26);
-    slider.setRange(minimum, maximum);
     slider.setTextValueSuffix(suffix);
     slider.setNumDecimalPlacesToDisplay(index == 1 ? 1 : 3);
-    auto *parameter = processor.getParameters().getParameter(index == 1   ? "frequency"
-                                                             : index == 2 ? "q"
-                                                                          : "mix");
+    constexpr std::array<const char *, 5> ids{"mode", "frequency", "q", "slope", "mix"};
+    auto *parameter = processor.getParameters().getParameter(ids[size_t(index)]);
+    const auto &range = parameter->getNormalisableRange();
+    slider.setRange(range.start, range.end, range.interval);
     slider.onDragStart = [this, parameter] {
         dragBefore = processor.readValues();
         dragging = true;

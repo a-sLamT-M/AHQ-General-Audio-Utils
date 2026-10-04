@@ -46,6 +46,13 @@ C++20 编译器。本次另用 clang-format 19.1.7 检查 C++ 格式。
 
 ## API 约束
 
+效果参数的范围声明在各自的 `*Parameters` 类型中，由简单的 `ParameterRange`
+值类型检查有限数值、闭区间边界及整数步长。核心的 `isValid()` 保留各效果的
+类型检查；JUCE 参数布局复用这些范围，界面旋钮读取已注册参数的范围。
+`PluginState` 在构造时缓存注册参数的范围，统一验证用户编辑和预置加载；音频
+线程上的校验不分配内存。插件独有的参数（例如预置种子的 UI 范围、过采样选项）
+仍由插件布局定义。非法输入直接拒绝，参数 ID、XML 版本及字段顺序不变。
+
 包含 `<ahq/audio/gainProcessor.h>`，在 CMake 中链接 `ahq::audio_core`。配置或
 非空处理之前须成功调用 `prepare(sampleRate)`。采样率须为有限值，范围为
 1 至 384000 Hz。成功的 `prepare()` 会结束已有过渡，并将当前增益和干湿比
@@ -133,7 +140,7 @@ clip、非对称 tanh tube 风格、软限幅 tape 风格、三角波折叠、�
 卷积。HRIR 保留声道间的声学时间差，并增加两路共同的因果延迟；48 kHz 时为
 18 个采样，干声对齐同一延迟。内嵌数据来自 MIT KEMAR diffuse 水平面 37 个
 双声道响应，负方位通过交换耳侧得到。数据许可、来源、SHA-256 与生成脚本见
-`src/data/kemarAttribution.md` 和 `scripts/buildKemarTable.ps1`。当前没有个体化
+`src/spatial/data/kemarAttribution.md` 和 `scripts/buildKemarTable.ps1`。当前没有个体化
 HRTF、头部追踪或实际听音验收。
 
 `<ahq/audio/grainDelay.h>` 是 Ghost Delay 的核心，使用 64 个固定颗粒槽和
@@ -366,6 +373,13 @@ Release，九个插件均生成 VST3 和 Standalone，22/22 核心及插件测�
 二进制依赖 MSVC x64 运行库；复制 VST3 时须保留整个 `.vst3` 目录结构。
 这些结果不代表已在实际 Windows/Linux DAW 或音频设备中验收，也不包含音乐
 素材试听。Windows Debug 插件尚未在此次构建中验证。
+
+同日完成参数校验去重、嵌套条件整理及源码/测试目录重构后，Windows MSVC 与
+Linux GCC 的 Release 构建各通过 23/23 测试（十四项核心、九项插件），覆盖
+参数边界、小数枚举/布尔值拒绝、预置拒绝时状态不变，以及选择框异步更新回归。
+九个 Windows VST3 再次通过上述配置的 pluginval level 5；日志位于
+`build/Windows/plugins-release/validation/refactor`。本轮未重跑 Linux pluginval、
+LV2 ABI 检查或实际 DAW 验收，前述检查结果属于重构前的版本。
 
 响度另以本机 FFmpeg 2023-03-02 版本的 ebur128 过滤器对照：44.1/48/96 kHz
 立体声校准音、单声道校准音和含静音/低电平/不同频率的 32 秒节目，共五个

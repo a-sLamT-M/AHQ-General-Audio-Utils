@@ -64,7 +64,6 @@ class SaturatorProcessor final : public juce::AudioProcessor {
 
   private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
-    static bool validateValues(std::span<const float>) noexcept;
     juce::AudioProcessorValueTreeState parameters;
     struct Engine {
         ahq::audio::Saturator core;

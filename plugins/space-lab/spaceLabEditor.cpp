@@ -1,6 +1,21 @@
 #include "spaceLabEditor.h"
 #include <cmath>
 
+namespace {
+int toggleIndexForParameter(int index) {
+    switch (index) {
+    case 4:
+        return 0;
+    case 5:
+        return 1;
+    case 8:
+        return 2;
+    default:
+        return -1;
+    }
+}
+} // namespace
+
 SpaceLabEditor::SpaceLabEditor(SpaceLabProcessor &owner)
     : AudioProcessorEditor(owner), ComponentMovementWatcher(this), processor(owner),
       display(owner.getAnalysis()) {
@@ -11,13 +26,13 @@ SpaceLabEditor::SpaceLabEditor(SpaceLabProcessor &owner)
     constexpr std::array<const char *, 10> ids{"width",      "haas",        "leftTilt", "rightTilt",
                                                "invertLeft", "invertRight", "modRate",  "modDepth",
                                                "split",      "mix"};
-    constexpr std::array<double, 10> minimum{0, -30, -12, -12, 0, 0, 0, 0, 0, 0},
-        maximum{3, 30, 12, 12, 1, 1, 10, 20, 1, 1};
+    constexpr std::array<const char *, 10> suffixes{"", " ms", " dB", " dB", "",
+                                                    "", " Hz", " ms", "",    ""};
     for (int i = 0; i < 10; ++i) {
         labels[size_t(i)].setText(names[size_t(i)], juce::dontSendNotification);
         addAndMakeVisible(labels[size_t(i)]);
         if (i == 4 || i == 5 || i == 8) {
-            const size_t toggleIndex = i == 4 ? 0 : i == 5 ? 1 : 2;
+            const size_t toggleIndex = size_t(toggleIndexForParameter(i));
             auto &toggle = toggles[toggleIndex];
             toggle.setButtonText("On");
             toggle.setComponentID(ids[size_t(i)]);
@@ -29,11 +44,7 @@ SpaceLabEditor::SpaceLabEditor(SpaceLabProcessor &owner)
                 timerCallback();
             };
         } else {
-            configureSlider(sliders[size_t(i)], i, minimum[size_t(i)], maximum[size_t(i)],
-                            i == 1 || i == 7   ? " ms"
-                            : i == 2 || i == 3 ? " dB"
-                            : i == 6           ? " Hz"
-                                               : "");
+            configureSlider(sliders[size_t(i)], i, suffixes[size_t(i)]);
             sliders[size_t(i)].setComponentID(ids[size_t(i)]);
         }
     }
@@ -87,18 +98,18 @@ void SpaceLabEditor::updateSpectrumVisibility() {
         stopTimer();
 }
 
-void SpaceLabEditor::configureSlider(juce::Slider &slider, int index, double minimum,
-                                     double maximum, const juce::String &suffix) {
+void SpaceLabEditor::configureSlider(juce::Slider &slider, int index, const juce::String &suffix) {
     addAndMakeVisible(slider);
     slider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
     slider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 120, 26);
-    slider.setRange(minimum, maximum);
     slider.setTextValueSuffix(suffix);
     slider.setNumDecimalPlacesToDisplay(index == 1 ? 1 : 3);
     constexpr std::array<const char *, 10> ids{"width",      "haas",        "leftTilt", "rightTilt",
                                                "invertLeft", "invertRight", "modRate",  "modDepth",
                                                "split",      "mix"};
     auto *parameter = processor.getParameters().getParameter(ids[size_t(index)]);
+    const auto &range = parameter->getNormalisableRange();
+    slider.setRange(range.start, range.end, range.interval);
     slider.onDragStart = [this, parameter] {
         dragBefore = processor.readValues();
         dragging = true;
@@ -167,10 +178,8 @@ void SpaceLabEditor::resized() {
         labels[size_t(index)].setBounds(x, y, width, 24);
         sliders[size_t(index)].setBounds(x, y + 24, width, 113);
         if (index == 4 || index == 5 || index == 8)
-            toggles[size_t(index == 4   ? 0
-                           : index == 5 ? 1
-                                        : 2)]
-                .setBounds(x + 20, y + 50, width - 30, 35);
+            toggles[size_t(toggleIndexForParameter(index))].setBounds(x + 20, y + 50, width - 30,
+                                                                      35);
     }
     presets.setBounds(20, 475, 250, 28);
     saveButton.setBounds(285, 475, 125, 28);

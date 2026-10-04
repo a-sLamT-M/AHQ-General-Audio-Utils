@@ -8,20 +8,14 @@ ChaosEditor::ChaosEditor(ChaosProcessor &owner)
     constexpr std::array<const char *, 10> names{
         "Slice",      "Probability", "Repeats",        "Reverse chance", "Pitch range",
         "Pan amount", "Drive",       "Distort chance", "Seed (integer)", "Wet mix"};
-    constexpr std::array<double, 10> minimum{10, 0, 1, 0, 0, 0, 0, 0, 0, 0},
-        maximum{250, 1, 8, 1, 24, 1, 36, 1, 65535, 1};
+    constexpr std::array<const char *, 10> suffixes{" ms", "",    "", "", " st",
+                                                    "",    " dB", "", "", ""};
     for (int index = 0; index < 10; ++index) {
-        configureSlider(sliders[size_t(index)], index, minimum[size_t(index)],
-                        maximum[size_t(index)],
-                        index == 0   ? " ms"
-                        : index == 4 ? " st"
-                        : index == 6 ? " dB"
-                                     : "");
+        configureSlider(sliders[size_t(index)], index, suffixes[size_t(index)]);
         labels[size_t(index)].setText(names[size_t(index)], juce::dontSendNotification);
         addAndMakeVisible(labels[size_t(index)]);
     }
     for (size_t index : {size_t(2), size_t(8)}) {
-        sliders[index].setRange(minimum[index], maximum[index], 1);
         sliders[index].setNumDecimalPlacesToDisplay(0);
     }
     sliders[8].setTooltip(
@@ -75,12 +69,10 @@ void ChaosEditor::updateSpectrumVisibility() {
         stopTimer();
 }
 
-void ChaosEditor::configureSlider(juce::Slider &slider, int index, double minimum, double maximum,
-                                  const juce::String &suffix) {
+void ChaosEditor::configureSlider(juce::Slider &slider, int index, const juce::String &suffix) {
     addAndMakeVisible(slider);
     slider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
     slider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 120, 26);
-    slider.setRange(minimum, maximum);
     slider.setTextValueSuffix(suffix);
     slider.setNumDecimalPlacesToDisplay(index == 1 ? 1 : 3);
     constexpr std::array<const char *, 10> ids{"slice",      "probability", "repeats", "reverse",
@@ -88,6 +80,8 @@ void ChaosEditor::configureSlider(juce::Slider &slider, int index, double minimu
                                                "seed",       "mix"};
     slider.setComponentID(ids[size_t(index)]);
     auto *parameter = processor.getParameters().getParameter(ids[size_t(index)]);
+    const auto &range = parameter->getNormalisableRange();
+    slider.setRange(range.start, range.end, range.interval);
     slider.onDragStart = [this, parameter] {
         dragBefore = processor.readValues();
         dragging = true;

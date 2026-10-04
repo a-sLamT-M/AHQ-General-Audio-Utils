@@ -1,5 +1,7 @@
 #pragma once
 
+#include "ahq/audio/parameterRange.h"
+
 #include "ahq/audio/linearSmoother.h"
 
 #include <array>
@@ -20,6 +22,15 @@ struct SpaceLabParameters {
     float modDepthMs = 0.0F;
     bool split = false;
     float mix = 1.0F;
+
+    static constexpr ParameterRange widthRange{0, 3};
+    static constexpr ParameterRange signedHaasMsRange{-30, 30};
+    static constexpr ParameterRange leftTiltDbRange{-12, 12};
+    static constexpr ParameterRange rightTiltDbRange{-12, 12};
+    static constexpr ParameterRange modRateHzRange{0, 10};
+    static constexpr ParameterRange modDepthMsRange{0, 20};
+    static constexpr ParameterRange mixRange{0, 1};
+    [[nodiscard]] bool isValid() const noexcept;
 };
 
 /// Stereo experiments: M/S width, Haas, independent tilt/polarity and right delay modulation.

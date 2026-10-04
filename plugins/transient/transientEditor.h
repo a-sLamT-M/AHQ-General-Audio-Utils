@@ -22,8 +22,7 @@ class TransientEditor final : public juce::AudioProcessorEditor,
     void componentVisibilityChanged() override { updateSpectrumVisibility(); }
     void updateSpectrumVisibility();
     void choosePresetFile(bool save);
-    void configureSlider(juce::Slider &, int index, double minimum, double maximum,
-                         const juce::String &suffix);
+    void configureSlider(juce::Slider &, int index, const juce::String &suffix);
     TransientProcessor &processor;
     std::array<juce::Slider, 5> sliders;
     juce::ComboBox presets;

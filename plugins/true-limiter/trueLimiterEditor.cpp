@@ -14,8 +14,7 @@ TrueLimiterEditor::TrueLimiterEditor(TrueLimiterProcessor &owner)
     constexpr std::array<const char *, 6> names{"Peak ceiling", "Target LUFS",
                                                 "Input gain",   "Lookahead",
                                                 "Release",      "Mix before protection"};
-    constexpr std::array<double, 6> minimum{-24, -36, -24, 0, 10, 0},
-        maximum{0, -5, 24, 20, 1000, 1};
+    constexpr std::array<const char *, 6> suffixes{" dB", " LUFS", " dB", " ms", " ms", ""};
     for (size_t i = 0; i < sliders.size(); ++i) {
         auto &slider = sliders[i];
         addAndMakeVisible(slider);
@@ -23,10 +22,11 @@ TrueLimiterEditor::TrueLimiterEditor(TrueLimiterProcessor &owner)
         labels[i].setText(names[i], juce::dontSendNotification);
         slider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
         slider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 130, 25);
-        slider.setRange(minimum[i], maximum[i]);
         slider.setNumDecimalPlacesToDisplay(2);
-        slider.setTextValueSuffix(i == 3 || i == 4 ? " ms" : i == 1 ? " LUFS" : i < 3 ? " dB" : "");
+        slider.setTextValueSuffix(suffixes[i]);
         auto *parameter = processor.getParameters().getParameter(IDS[i]);
+        const auto &range = parameter->getNormalisableRange();
+        slider.setRange(range.start, range.end, range.interval);
         slider.onDragStart = [this, parameter] {
             dragBefore = processor.readValues();
             dragging = true;

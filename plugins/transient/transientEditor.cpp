@@ -7,14 +7,9 @@ TransientEditor::TransientEditor(TransientProcessor &owner)
     setSize(660, 610);
     const std::array<const char *, 5> names{"Attack", "Sustain", "Sensitivity", "Time",
                                             "Wet mix (0-1)"};
-    const std::array<double, 5> minimum{-12, -12, -80, 5, 0}, maximum{12, 12, -20, 200, 1};
+    constexpr std::array<const char *, 5> suffixes{" dB", " dB", " dBFS", " ms", ""};
     for (int index = 0; index < 5; ++index) {
-        configureSlider(sliders[size_t(index)], index, minimum[size_t(index)],
-                        maximum[size_t(index)],
-                        index < 2    ? " dB"
-                        : index == 2 ? " dBFS"
-                        : index == 3 ? " ms"
-                                     : "");
+        configureSlider(sliders[size_t(index)], index, suffixes[size_t(index)]);
         labels[size_t(index)].setText(names[size_t(index)], juce::dontSendNotification);
         addAndMakeVisible(labels[size_t(index)]);
     }
@@ -64,16 +59,16 @@ void TransientEditor::updateSpectrumVisibility() {
         stopTimer();
 }
 
-void TransientEditor::configureSlider(juce::Slider &slider, int index, double minimum,
-                                      double maximum, const juce::String &suffix) {
+void TransientEditor::configureSlider(juce::Slider &slider, int index, const juce::String &suffix) {
     addAndMakeVisible(slider);
     slider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
     slider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 120, 26);
-    slider.setRange(minimum, maximum);
     slider.setTextValueSuffix(suffix);
     slider.setNumDecimalPlacesToDisplay(index == 1 ? 1 : 3);
     constexpr std::array<const char *, 5> ids{"attack", "sustain", "sensitivity", "time", "mix"};
     auto *parameter = processor.getParameters().getParameter(ids[size_t(index)]);
+    const auto &range = parameter->getNormalisableRange();
+    slider.setRange(range.start, range.end, range.interval);
     slider.onDragStart = [this, parameter] {
         dragBefore = processor.readValues();
         dragging = true;

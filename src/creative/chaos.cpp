@@ -5,25 +5,14 @@
 #include <new>
 
 namespace ahq::audio {
-namespace {
 
-bool validParameters(const ChaosParameters &parameters) noexcept {
-    return std::isfinite(parameters.sliceMs) && parameters.sliceMs >= 10.0F &&
-           parameters.sliceMs <= 250.0F && std::isfinite(parameters.probability) &&
-           parameters.probability >= 0.0F && parameters.probability <= 1.0F &&
-           parameters.repeats >= 1 && parameters.repeats <= 8 &&
-           std::isfinite(parameters.reverseProbability) && parameters.reverseProbability >= 0.0F &&
-           parameters.reverseProbability <= 1.0F && std::isfinite(parameters.pitchRangeSemitones) &&
-           parameters.pitchRangeSemitones >= 0.0F && parameters.pitchRangeSemitones <= 24.0F &&
-           std::isfinite(parameters.panAmount) && parameters.panAmount >= 0.0F &&
-           parameters.panAmount <= 1.0F && std::isfinite(parameters.driveDb) &&
-           parameters.driveDb >= 0.0F && parameters.driveDb <= 36.0F &&
-           std::isfinite(parameters.distortionProbability) &&
-           parameters.distortionProbability >= 0.0F && parameters.distortionProbability <= 1.0F &&
-           std::isfinite(parameters.mix) && parameters.mix >= 0.0F && parameters.mix <= 1.0F;
+bool ChaosParameters::isValid() const noexcept {
+    return sliceMsRange.contains(sliceMs) && probabilityRange.contains(probability) &&
+           repeatsRange.contains(repeats) && reverseProbabilityRange.contains(reverseProbability) &&
+           pitchRangeSemitonesRange.contains(pitchRangeSemitones) &&
+           panAmountRange.contains(panAmount) && driveDbRange.contains(driveDb) &&
+           distortionProbabilityRange.contains(distortionProbability) && mixRange.contains(mix);
 }
-
-} // namespace
 
 bool Chaos::prepare(double sampleRate) noexcept {
     if (!std::isfinite(sampleRate) || sampleRate < 8000.0 || sampleRate > 384000.0) {
@@ -45,7 +34,7 @@ bool Chaos::prepare(double sampleRate) noexcept {
 }
 
 bool Chaos::setParameters(const ChaosParameters &parameters) noexcept {
-    if (transitionFrames_ == 0 || !validParameters(parameters)) {
+    if (transitionFrames_ == 0 || !parameters.isValid()) {
         return false;
     }
     if (parameters.seed != parameters_.seed) {

@@ -4,19 +4,12 @@
 #include <cmath>
 
 namespace ahq::audio {
-namespace {
 
-bool validParameters(const TransientShaperParameters &parameters) noexcept {
-    return std::isfinite(parameters.attackDb) && parameters.attackDb >= -12.0F &&
-           parameters.attackDb <= 12.0F && std::isfinite(parameters.sustainDb) &&
-           parameters.sustainDb >= -12.0F && parameters.sustainDb <= 12.0F &&
-           std::isfinite(parameters.sensitivityDb) && parameters.sensitivityDb >= -80.0F &&
-           parameters.sensitivityDb <= -20.0F && std::isfinite(parameters.timeMs) &&
-           parameters.timeMs >= 5.0F && parameters.timeMs <= 200.0F &&
-           std::isfinite(parameters.mix) && parameters.mix >= 0.0F && parameters.mix <= 1.0F;
+bool TransientShaperParameters::isValid() const noexcept {
+    return attackDbRange.contains(attackDb) && sustainDbRange.contains(sustainDb) &&
+           sensitivityDbRange.contains(sensitivityDb) && timeMsRange.contains(timeMs) &&
+           mixRange.contains(mix);
 }
-
-} // namespace
 
 bool TransientShaper::prepare(double sampleRate) noexcept {
     if (!std::isfinite(sampleRate) || sampleRate < 1.0 || sampleRate > 384000.0) {
@@ -29,7 +22,7 @@ bool TransientShaper::prepare(double sampleRate) noexcept {
 }
 
 bool TransientShaper::setParameters(const TransientShaperParameters &parameters) noexcept {
-    if (transitionFrames_ == 0 || !validParameters(parameters)) {
+    if (transitionFrames_ == 0 || !parameters.isValid()) {
         return false;
     }
     parameters_ = parameters;

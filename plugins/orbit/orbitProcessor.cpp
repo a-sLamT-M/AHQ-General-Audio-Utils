@@ -16,25 +16,26 @@ constexpr std::array<OrbitProcessor::Values, 4> factoryValues{{{0.2F, 0, 120, 4,
 } // namespace
 
 juce::AudioProcessorValueTreeState::ParameterLayout OrbitProcessor::createParameterLayout() {
+    using Parameters = ahq::audio::OrbitParameters;
     juce::AudioProcessorValueTreeState::ParameterLayout layout;
     layout.add(std::make_unique<juce::AudioParameterFloat>(
-        juce::ParameterID{"rate", 1}, "Rate", juce::NormalisableRange<float>(0, 10), 0.2F));
+        juce::ParameterID{"rate", 1}, "Rate", toJuceRange(Parameters::rateHzRange), 0.2F));
     layout.add(std::make_unique<juce::AudioParameterChoice>(
         juce::ParameterID{"sync", 1}, "Speed mode", juce::StringArray{"Hz", "BPM"}, 0));
     layout.add(std::make_unique<juce::AudioParameterFloat>(
-        juce::ParameterID{"bpm", 1}, "Manual BPM", juce::NormalisableRange<float>(20, 300), 120));
+        juce::ParameterID{"bpm", 1}, "Manual BPM", toJuceRange(Parameters::bpmRange), 120));
     layout.add(std::make_unique<juce::AudioParameterFloat>(
         juce::ParameterID{"beats", 1}, "Beats per revolution",
-        juce::NormalisableRange<float>(0.25F, 64), 4));
+        toJuceRange(Parameters::beatsPerRevolutionRange), 4));
     layout.add(std::make_unique<juce::AudioParameterChoice>(
         juce::ParameterID{"direction", 1}, "Direction",
         juce::StringArray{"Clockwise", "Counterclockwise"}, 0));
+    layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID{"depth", 1}, "Depth",
+                                                           toJuceRange(Parameters::depthRange), 1));
     layout.add(std::make_unique<juce::AudioParameterFloat>(
-        juce::ParameterID{"depth", 1}, "Depth", juce::NormalisableRange<float>(0, 1), 1));
-    layout.add(std::make_unique<juce::AudioParameterFloat>(
-        juce::ParameterID{"phase", 1}, "Phase", juce::NormalisableRange<float>(0, 360), 0));
-    layout.add(std::make_unique<juce::AudioParameterFloat>(
-        juce::ParameterID{"mix", 1}, "Mix", juce::NormalisableRange<float>(0, 1), 1));
+        juce::ParameterID{"phase", 1}, "Phase", toJuceRange(Parameters::phaseDegreesRange), 0));
+    layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID{"mix", 1}, "Mix",
+                                                           toJuceRange(Parameters::mixRange), 1));
     return layout;
 }
 OrbitProcessor::OrbitProcessor()
@@ -42,7 +43,7 @@ OrbitProcessor::OrbitProcessor()
                          .withInput("Input", juce::AudioChannelSet::stereo(), true)
                          .withOutput("Output", juce::AudioChannelSet::stereo(), true)),
       parameters(*this, nullptr, "OrbitParameters", createParameterLayout()),
-      state(parameters, parameterIds, "AHQOrbitState", validateValues, currentProgram) {
+      state(parameters, parameterIds, "AHQOrbitState", currentProgram) {
     tempoSnapshot.store(std::bit_cast<std::uint32_t>(120.0F));
 }
 
@@ -109,7 +110,7 @@ void OrbitProcessor::processAudio(juce::AudioBuffer<float> &buffer, bool bypasse
         buffer.copyFrom(1, 0, buffer, 0, 0, buffer.getNumSamples());
     const auto inputPeak = PluginAnalysis::peak(buffer);
     const auto values = readValues();
-    if (prepared && validateValues(values))
+    if (prepared && state.validateValues(values))
         (void)filter.setParameters(effectiveParameters(values));
     auto *left = buffer.getWritePointer(0);
     auto *right = buffer.getWritePointer(1);
@@ -128,16 +129,6 @@ void OrbitProcessor::processAudio(juce::AudioBuffer<float> &buffer, bool bypasse
         right[frame] = bypassed || !prepared ? dry[1] : wet[1];
     }
     analysis.publish(buffer, inputPeak);
-}
-bool OrbitProcessor::validateValues(std::span<const float> v) noexcept {
-    if (v.size() != 8)
-        return false;
-    for (float value : v)
-        if (!std::isfinite(value))
-            return false;
-    return v[0] >= 0 && v[0] <= 10 && (v[1] == 0 || v[1] == 1) && v[2] >= 20 && v[2] <= 300 &&
-           v[3] >= 0.25F && v[3] <= 64 && (v[4] == 0 || v[4] == 1) && v[5] >= 0 && v[5] <= 1 &&
-           v[6] >= 0 && v[6] <= 360 && v[7] >= 0 && v[7] <= 1;
 }
 int OrbitProcessor::getNumPrograms() { return static_cast<int>(factoryValues.size()); }
 const juce::String OrbitProcessor::getProgramName(int index) {

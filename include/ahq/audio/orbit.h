@@ -1,5 +1,7 @@
 #pragma once
 
+#include "ahq/audio/parameterRange.h"
+
 #include "ahq/audio/linearSmoother.h"
 
 #include <array>
@@ -19,14 +21,23 @@ struct OrbitParameters {
     float depth = 1.0F;
     float phaseDegrees = 0.0F;
     float mix = 1.0F;
+
+    static constexpr ParameterRange rateHzRange{0, 10};
+    static constexpr ParameterRange bpmRange{20, 300};
+    static constexpr ParameterRange beatsPerRevolutionRange{0.25F, 64};
+    static constexpr ParameterRange directionRange{0, 1, 1};
+    static constexpr ParameterRange depthRange{0, 1};
+    static constexpr ParameterRange phaseDegreesRange{0, 360};
+    static constexpr ParameterRange mixRange{0, 1};
+    [[nodiscard]] bool isValid() const noexcept;
 };
 
 /// Headphone binaural rotation using measured horizontal-plane diffuse-field KEMAR HRIRs.
-/// Bill Gardner and Keith Martin, Copyright 1994 MIT Media Laboratory; see src/data attribution.
-/// 0/90/180/270 degrees mean front/right/back/left; clockwise progresses toward the right.
-/// Wet input is one source M=(L+R)/2, so opposite-polarity stereo can cancel in the wet path.
-/// Depth crossfades front HRIR with rotating HRIR (0 fixed front, 1 full rotation), not distance.
-/// All calls use one thread. An instance holds about 460 KiB of fixed FIR storage.
+/// Bill Gardner and Keith Martin, Copyright 1994 MIT Media Laboratory; see src/spatial/data
+/// attribution. 0/90/180/270 degrees mean front/right/back/left; clockwise progresses toward the
+/// right. Wet input is one source M=(L+R)/2, so opposite-polarity stereo can cancel in the wet
+/// path. Depth crossfades front HRIR with rotating HRIR (0 fixed front, 1 full rotation), not
+/// distance. All calls use one thread. An instance holds about 460 KiB of fixed FIR storage.
 class Orbit {
   public:
     /// Accepts finite sample rates [8000,384000] Hz, resamples HRIRs offline and resets history.

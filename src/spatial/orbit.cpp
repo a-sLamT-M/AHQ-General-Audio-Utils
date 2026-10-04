@@ -7,20 +7,15 @@
 #include <numbers>
 
 namespace ahq::audio {
-namespace {
 
-bool validParameters(const OrbitParameters &parameters) noexcept {
-    return std::isfinite(parameters.rateHz) && parameters.rateHz >= 0.0F &&
-           parameters.rateHz <= 10.0F && std::isfinite(parameters.bpm) && parameters.bpm >= 20.0F &&
-           parameters.bpm <= 300.0F && std::isfinite(parameters.beatsPerRevolution) &&
-           parameters.beatsPerRevolution >= 0.25F && parameters.beatsPerRevolution <= 64.0F &&
-           (parameters.direction == OrbitDirection::clockwise ||
-            parameters.direction == OrbitDirection::counterClockwise) &&
-           std::isfinite(parameters.depth) && parameters.depth >= 0.0F &&
-           parameters.depth <= 1.0F && std::isfinite(parameters.phaseDegrees) &&
-           parameters.phaseDegrees >= 0.0F && parameters.phaseDegrees <= 360.0F &&
-           std::isfinite(parameters.mix) && parameters.mix >= 0.0F && parameters.mix <= 1.0F;
+bool OrbitParameters::isValid() const noexcept {
+    return rateHzRange.contains(rateHz) && bpmRange.contains(bpm) &&
+           beatsPerRevolutionRange.contains(beatsPerRevolution) &&
+           directionRange.contains(static_cast<int>(direction)) && depthRange.contains(depth) &&
+           phaseDegreesRange.contains(phaseDegrees) && mixRange.contains(mix);
 }
+
+namespace {
 
 double sinc(double value) noexcept {
     return std::abs(value) < 1.0e-12
@@ -79,7 +74,7 @@ bool Orbit::prepare(double sampleRate) noexcept {
 }
 
 bool Orbit::setParameters(const OrbitParameters &parameters) noexcept {
-    if (transitionFrames_ == 0 || !validParameters(parameters)) {
+    if (transitionFrames_ == 0 || !parameters.isValid()) {
         return false;
     }
     if (wrapDegrees(parameters.phaseDegrees) != wrapDegrees(parameters_.phaseDegrees)) {

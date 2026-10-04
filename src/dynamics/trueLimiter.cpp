@@ -6,17 +6,16 @@
 #include <utility>
 
 namespace ahq::audio {
+
+bool TrueLimiterParameters::isValid() const noexcept {
+    return ceilingDbRange.contains(ceilingDb) && releaseMsRange.contains(releaseMs) &&
+           inputGainDbRange.contains(inputGainDb) && mixRange.contains(mix) &&
+           targetLufsRange.contains(targetLufs);
+}
+
 namespace {
 
 double fromDb(double db) noexcept { return std::pow(10.0, db / 20.0); }
-
-bool validParameters(const TrueLimiterParameters &p) noexcept {
-    return std::isfinite(p.ceilingDb) && p.ceilingDb >= -24.0F && p.ceilingDb <= 0.0F &&
-           std::isfinite(p.releaseMs) && p.releaseMs >= 10.0F && p.releaseMs <= 1000.0F &&
-           std::isfinite(p.inputGainDb) && p.inputGainDb >= -24.0F && p.inputGainDb <= 24.0F &&
-           std::isfinite(p.mix) && p.mix >= 0.0F && p.mix <= 1.0F && std::isfinite(p.targetLufs) &&
-           p.targetLufs >= -36.0F && p.targetLufs <= -5.0F;
-}
 
 LoudnessReading measure(std::span<const float> left, std::span<const float> right, double rate) {
     LoudnessMeter meter;
@@ -98,7 +97,7 @@ bool TrueLimiter::prepare(double rate, unsigned channels, double lookaheadMs,
 }
 
 bool TrueLimiter::setParameters(const TrueLimiterParameters &parameters) noexcept {
-    if (channels_ == 0 || !validParameters(parameters)) {
+    if (channels_ == 0 || !parameters.isValid()) {
         return false;
     }
     parameters_ = parameters;
@@ -312,7 +311,7 @@ LoudnessMatchResult TrueLimiter::analyzeMatch(std::span<const float> left,
                                               double lookaheadMs, unsigned oversampling) noexcept {
     LoudnessMatchResult result;
     if (!std::isfinite(targetLufs) || targetLufs < -36.0 || targetLufs > -5.0 ||
-        (!right.empty() && right.size() != left.size()) || !validParameters(parameters)) {
+        (!right.empty() && right.size() != left.size()) || !parameters.isValid()) {
         return result;
     }
     try {

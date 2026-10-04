@@ -58,7 +58,6 @@ class SpaceLabProcessor final : public juce::AudioProcessor {
 
   private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
-    static bool validateValues(std::span<const float>) noexcept;
     juce::AudioProcessorValueTreeState parameters;
     void processAudio(juce::AudioBuffer<float> &, bool bypassed);
     ahq::audio::SpaceLab filter;

@@ -111,37 +111,39 @@ void MasterScopeEditor::paint(juce::Graphics &g) {
     };
     text("Momentary (400 ms): " + loudnessText(metering.momentary), 20, 105);
     text("Short-term (3 s): " + loudnessText(metering.shortTerm), 20, 137);
-    text("Integrated gated: " +
-             (integrated.gap                ? juce::String("INVALID - capture gap")
-              : integrated.allocationFailed ? juce::String("INVALID - memory exhausted")
-              : integrated.blocks > 0 && integrated.generation == metering.generation &&
-                      !metering.resetPending && !integrated.loudness.valid
-                  ? juce::String("No signal / below gate")
-                  : loudnessText(integrated.loudness)),
-         20, 169);
+    juce::String integratedText = loudnessText(integrated.loudness);
+    juce::String rangeText = "waiting for short-term windows";
+    if (integrated.gap) {
+        integratedText = "INVALID - capture gap";
+        rangeText = integratedText;
+    } else if (integrated.allocationFailed) {
+        integratedText = "INVALID - memory exhausted";
+        rangeText = integratedText;
+    } else {
+        if (integrated.blocks > 0 && integrated.generation == metering.generation &&
+            !metering.resetPending && !integrated.loudness.valid)
+            integratedText = "No signal / below gate";
+        if (integrated.rangeValid)
+            rangeText = juce::String(integrated.loudnessRange, 1) + " LU";
+        else if (metering.shortTerm.valid && !std::isfinite(metering.shortTerm.lufs))
+            rangeText = "no signal";
+    }
+    text("Integrated gated: " + integratedText, 20, 169);
     text("Integrated blocks: " + juce::String(juce::int64(integrated.blocks)), 20, 201);
-    text(integrated.gap                ? juce::String("Loudness range: INVALID - capture gap")
-         : integrated.allocationFailed ? juce::String("Loudness range: INVALID - memory exhausted")
-         : integrated.rangeValid
-             ? "Loudness range: " + juce::String(integrated.loudnessRange, 1) + " LU"
-         : metering.shortTerm.valid && !std::isfinite(metering.shortTerm.lufs)
-             ? "Loudness range: no signal"
-             : "Loudness range: waiting for short-term windows",
-         20, 297);
+    text("Loudness range: " + rangeText, 20, 297);
     const auto &s = metering.stereo;
     text("400 ms nonoverlapping windows", 520, 105);
-    text(s.valid ? "RMS L / R: " + db(s.rms[0]) + " / " +
-                       (s.stereo ? db(s.rms[1]) : juce::String("n/a")) + " dBFS"
-                 : "RMS: Window not filled",
-         520, 137);
-    text(
-        s.valid
-            ? "Crest L / R: " +
-                  (s.rms[0] > 0 ? juce::String(s.crestDb[0], 2) : juce::String("n/a")) + " / " +
-                  (s.stereo && s.rms[1] > 0 ? juce::String(s.crestDb[1], 2) : juce::String("n/a")) +
-                  " dB"
-            : "Crest: Window not filled",
-        520, 169);
+    if (s.valid) {
+        const auto rightRms = s.stereo ? db(s.rms[1]) : juce::String("n/a");
+        const auto leftCrest = s.rms[0] > 0 ? juce::String(s.crestDb[0], 2) : juce::String("n/a");
+        const auto rightCrest =
+            s.stereo && s.rms[1] > 0 ? juce::String(s.crestDb[1], 2) : juce::String("n/a");
+        text("RMS L / R: " + db(s.rms[0]) + " / " + rightRms + " dBFS", 520, 137);
+        text("Crest L / R: " + leftCrest + " / " + rightCrest + " dB", 520, 169);
+    } else {
+        text("RMS: Window not filled", 520, 137);
+        text("Crest: Window not filled", 520, 169);
+    }
     text("Crest = 20 log10(window peak / window RMS)", 520, 201);
     text(s.correlationValid ? "Correlation: " + juce::String(s.correlation, 3)
                             : "Correlation: n/a / no signal",
@@ -152,16 +154,18 @@ void MasterScopeEditor::paint(juce::Graphics &g) {
                    juce::String(100 * s.sideEnergy / total, 1) + "%"
              : "M/S energy share: n/a / no signal",
          520, 265);
-    text(metering.peaksValid
-             ? "Sample peak L / R: " + db(metering.peaks[0].samplePeak) + " / " +
-                   (s.stereo ? db(metering.peaks[1].samplePeak) : juce::String("n/a")) + " dBFS"
-             : "Sample peak: Window not filled",
-         20, 233);
-    text(metering.peaksValid
-             ? "4x TP estimate L / R: " + db(metering.peaks[0].truePeak) + " / " +
-                   (s.stereo ? db(metering.peaks[1].truePeak) : juce::String("n/a")) + " dBTP"
-             : "4x TP estimate: Window not filled",
-         20, 265);
+    if (metering.peaksValid) {
+        const auto rightPeak = s.stereo ? db(metering.peaks[1].samplePeak) : juce::String("n/a");
+        const auto rightTruePeak = s.stereo ? db(metering.peaks[1].truePeak) : juce::String("n/a");
+        text("Sample peak L / R: " + db(metering.peaks[0].samplePeak) + " / " + rightPeak + " dBFS",
+             20, 233);
+        text("4x TP estimate L / R: " + db(metering.peaks[0].truePeak) + " / " + rightTruePeak +
+                 " dBTP",
+             20, 265);
+    } else {
+        text("Sample peak: Window not filled", 20, 233);
+        text("4x TP estimate: Window not filled", 20, 265);
+    }
     {
         juce::Graphics::ScopedSaveState save(g);
         g.addTransform(juce::AffineTransform::translation(0, -45));

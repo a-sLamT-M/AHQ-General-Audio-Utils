@@ -1,5 +1,7 @@
 #pragma once
 
+#include "ahq/audio/parameterRange.h"
+
 #include "ahq/audio/linearSmoother.h"
 
 #include <array>
@@ -17,6 +19,13 @@ struct SaturatorParameters {
     float bias = 0.0F;
     float tone = 0.0F;
     float mix = 1.0F;
+
+    static constexpr ParameterRange modelRange{0, 6, 1};
+    static constexpr ParameterRange driveDbRange{0, 36};
+    static constexpr ParameterRange biasRange{-1, 1};
+    static constexpr ParameterRange toneRange{-1, 1};
+    static constexpr ParameterRange mixRange{0, 1};
+    [[nodiscard]] bool isValid() const noexcept;
 };
 
 /// Digital nonlinear curves, not circuit simulations. All calls use one thread.

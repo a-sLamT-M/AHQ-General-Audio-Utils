@@ -12,18 +12,19 @@ constexpr std::array<TransientProcessor::Values, 4> factoryValues{
 } // namespace
 
 juce::AudioProcessorValueTreeState::ParameterLayout TransientProcessor::createParameterLayout() {
+    using Parameters = ahq::audio::TransientShaperParameters;
     juce::AudioProcessorValueTreeState::ParameterLayout layout;
     layout.add(std::make_unique<juce::AudioParameterFloat>(
-        juce::ParameterID{"attack", 1}, "Attack", juce::NormalisableRange<float>(-12, 12), 0));
+        juce::ParameterID{"attack", 1}, "Attack", toJuceRange(Parameters::attackDbRange), 0));
     layout.add(std::make_unique<juce::AudioParameterFloat>(
-        juce::ParameterID{"sustain", 1}, "Sustain", juce::NormalisableRange<float>(-12, 12), 0));
+        juce::ParameterID{"sustain", 1}, "Sustain", toJuceRange(Parameters::sustainDbRange), 0));
     layout.add(std::make_unique<juce::AudioParameterFloat>(
         juce::ParameterID{"sensitivity", 1}, "Sensitivity",
-        juce::NormalisableRange<float>(-80, -20), -60));
+        toJuceRange(Parameters::sensitivityDbRange), -60));
     layout.add(std::make_unique<juce::AudioParameterFloat>(
-        juce::ParameterID{"time", 1}, "Time", juce::NormalisableRange<float>(5, 200), 50));
-    layout.add(std::make_unique<juce::AudioParameterFloat>(
-        juce::ParameterID{"mix", 1}, "Mix", juce::NormalisableRange<float>(0, 1), 1));
+        juce::ParameterID{"time", 1}, "Time", toJuceRange(Parameters::timeMsRange), 50));
+    layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID{"mix", 1}, "Mix",
+                                                           toJuceRange(Parameters::mixRange), 1));
     return layout;
 }
 TransientProcessor::TransientProcessor()
@@ -31,7 +32,7 @@ TransientProcessor::TransientProcessor()
                          .withInput("Input", juce::AudioChannelSet::stereo(), true)
                          .withOutput("Output", juce::AudioChannelSet::stereo(), true)),
       parameters(*this, nullptr, "TransientParameters", createParameterLayout()),
-      state(parameters, parameterIds, "AHQTransientState", validateValues, currentProgram) {
+      state(parameters, parameterIds, "AHQTransientState", currentProgram) {
     setLatencySamples(0);
 }
 
@@ -58,7 +59,7 @@ void TransientProcessor::processBlock(juce::AudioBuffer<float> &buffer, juce::Mi
         return;
     const auto inputPeak = PluginAnalysis::peak(buffer);
     const auto values = readValues();
-    if (prepared && validateValues(values) && buffer.getNumChannels() >= 1 &&
+    if (prepared && state.validateValues(values) && buffer.getNumChannels() >= 1 &&
         buffer.getNumChannels() <= 2) {
         const bool accepted =
             filter.setParameters({values[0], values[1], values[2], values[3], values[4]});
@@ -72,16 +73,6 @@ void TransientProcessor::processBlock(juce::AudioBuffer<float> &buffer, juce::Mi
         }
     }
     analysis.publish(buffer, inputPeak);
-}
-
-bool TransientProcessor::validateValues(std::span<const float> v) noexcept {
-    if (v.size() != 5)
-        return false;
-    for (float value : v)
-        if (!std::isfinite(value))
-            return false;
-    return v[0] >= -12 && v[0] <= 12 && v[1] >= -12 && v[1] <= 12 && v[2] >= -80 && v[2] <= -20 &&
-           v[3] >= 5 && v[3] <= 200 && v[4] >= 0 && v[4] <= 1;
 }
 
 int TransientProcessor::getNumPrograms() { return static_cast<int>(factoryValues.size()); }

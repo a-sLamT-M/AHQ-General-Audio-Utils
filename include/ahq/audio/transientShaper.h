@@ -1,5 +1,7 @@
 #pragma once
 
+#include "ahq/audio/parameterRange.h"
+
 #include "ahq/audio/linearSmoother.h"
 
 #include <cstdint>
@@ -13,6 +15,13 @@ struct TransientShaperParameters {
     float sensitivityDb = -60.0F;
     float timeMs = 50.0F;
     float mix = 1.0F;
+
+    static constexpr ParameterRange attackDbRange{-12, 12};
+    static constexpr ParameterRange sustainDbRange{-12, 12};
+    static constexpr ParameterRange sensitivityDbRange{-80, -20};
+    static constexpr ParameterRange timeMsRange{5, 200};
+    static constexpr ParameterRange mixRange{0, 1};
+    [[nodiscard]] bool isValid() const noexcept;
 };
 
 /// Linked mono/stereo transient shaping. All calls to an instance use one thread.

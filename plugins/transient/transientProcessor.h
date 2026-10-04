@@ -56,7 +56,6 @@ class TransientProcessor final : public juce::AudioProcessor {
 
   private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
-    static bool validateValues(std::span<const float>) noexcept;
     juce::AudioProcessorValueTreeState parameters;
     ahq::audio::TransientShaper filter;
     bool prepared = false;

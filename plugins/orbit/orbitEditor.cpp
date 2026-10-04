@@ -7,14 +7,10 @@ OrbitEditor::OrbitEditor(OrbitProcessor &owner)
     setSize(660, 610);
     constexpr std::array<const char *, 6> names{"Rate",  "Manual BPM", "Beats / turn",
                                                 "Depth", "Phase",      "Wet mix"};
-    constexpr std::array<double, 6> minimum{0, 20, 0.25, 0, 0, 0}, maximum{10, 300, 64, 1, 360, 1};
+    constexpr std::array<const char *, 6> suffixes{" Hz", "", "", "", " deg", ""};
     constexpr std::array<int, 6> indices{0, 2, 3, 5, 6, 7};
     for (int index = 0; index < 6; ++index) {
-        configureSlider(sliders[size_t(index)], indices[size_t(index)], minimum[size_t(index)],
-                        maximum[size_t(index)],
-                        index == 0   ? " Hz"
-                        : index == 4 ? " deg"
-                                     : "");
+        configureSlider(sliders[size_t(index)], indices[size_t(index)], suffixes[size_t(index)]);
         labels[size_t(index)].setText(names[size_t(index)], juce::dontSendNotification);
         addAndMakeVisible(labels[size_t(index)]);
     }
@@ -90,17 +86,17 @@ void OrbitEditor::updateSpectrumVisibility() {
         stopTimer();
 }
 
-void OrbitEditor::configureSlider(juce::Slider &slider, int index, double minimum, double maximum,
-                                  const juce::String &suffix) {
+void OrbitEditor::configureSlider(juce::Slider &slider, int index, const juce::String &suffix) {
     addAndMakeVisible(slider);
     slider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
     slider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 102, 26);
-    slider.setRange(minimum, maximum);
     slider.setTextValueSuffix(suffix);
     slider.setNumDecimalPlacesToDisplay(index == 1 ? 1 : 3);
     constexpr std::array<const char *, 8> ids{"rate",      "sync",  "bpm",   "beats",
                                               "direction", "depth", "phase", "mix"};
     auto *parameter = processor.getParameters().getParameter(ids[size_t(index)]);
+    const auto &range = parameter->getNormalisableRange();
+    slider.setRange(range.start, range.end, range.interval);
     slider.onDragStart = [this, parameter] {
         dragBefore = processor.readValues();
         dragging = true;
@@ -129,13 +125,19 @@ void OrbitEditor::timerCallback() {
             sliders[index].setValue(values[size_t(indices[index])], juce::dontSendNotification);
         }
     const auto tempo = processor.readTempo();
-    tempoStatus.setText(tempo.source == OrbitProcessor::TempoSource::hz
-                            ? "Last audio: Hz speed"
-                            : (tempo.source == OrbitProcessor::TempoSource::host
-                                   ? "Last audio: Host BPM "
-                                   : "Last audio: Manual BPM ") +
-                                  juce::String(tempo.bpm, 1),
-                        juce::dontSendNotification);
+    juce::String tempoText;
+    switch (tempo.source) {
+    case OrbitProcessor::TempoSource::hz:
+        tempoText = "Last audio: Hz speed";
+        break;
+    case OrbitProcessor::TempoSource::host:
+        tempoText = "Last audio: Host BPM " + juce::String(tempo.bpm, 1);
+        break;
+    case OrbitProcessor::TempoSource::manual:
+        tempoText = "Last audio: Manual BPM " + juce::String(tempo.bpm, 1);
+        break;
+    }
+    tempoStatus.setText(tempoText, juce::dontSendNotification);
     undoButton.setEnabled(processor.canUndo());
     redoButton.setEnabled(processor.canRedo());
     display.refresh(spectrumVisible);

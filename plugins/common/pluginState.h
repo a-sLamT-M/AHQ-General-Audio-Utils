@@ -1,4 +1,5 @@
 #pragma once
+#include "ahq/audio/parameterRange.h"
 #include <atomic>
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <span>
@@ -8,9 +9,9 @@
 class PluginState {
   public:
     using Values = std::vector<float>;
-    using Validator = bool (*)(std::span<const float>) noexcept;
     PluginState(juce::AudioProcessorValueTreeState &, std::span<const char *const>,
-                const char *xmlTag, Validator, std::atomic<int> &program);
+                const char *xmlTag, std::atomic<int> &program);
+    [[nodiscard]] bool validateValues(std::span<const float>) const noexcept;
     void fillValues(std::span<float>) const noexcept;
     juce::String createPresetXml() const;
     bool loadPresetXml(const juce::String &, bool undoable);
@@ -36,7 +37,7 @@ class PluginState {
     void writeParameter(size_t index, float value, bool notifyHost);
     std::vector<const char *> ids;
     juce::String xmlTag;
-    Validator validator;
+    std::vector<ahq::audio::ParameterRange> parameterRanges;
     std::atomic<int> &currentProgram;
     std::vector<std::atomic<float> *> rawParameters;
     std::vector<juce::RangedAudioParameter *> rangedParameters;
@@ -44,3 +45,7 @@ class PluginState {
     std::atomic<unsigned> stateRevision{0};
     unsigned historyRevision = 0;
 };
+
+inline juce::NormalisableRange<float> toJuceRange(ahq::audio::ParameterRange range) {
+    return {range.minimum, range.maximum, range.interval};
+}

@@ -8,19 +8,12 @@ GhostDelayEditor::GhostDelayEditor(GhostDelayProcessor &owner)
     constexpr std::array<const char *, 9> names{"Grain",      "Delay",          "Pitch",
                                                 "Scatter",    "Density",        "Feedback",
                                                 "Randomness", "Seed (integer)", "Wet mix"};
-    constexpr std::array<double, 9> minimum{20, 10, -24, 0, 1, 0, 0, 0, 0},
-        maximum{500, 2000, 24, 1, 80, 0.95, 1, 65535, 1};
+    constexpr std::array<const char *, 9> suffixes{" ms", " ms", " st", "", " Hz", "", "", "", ""};
     for (int index = 0; index < 9; ++index) {
-        configureSlider(sliders[size_t(index)], index, minimum[size_t(index)],
-                        maximum[size_t(index)],
-                        index < 2    ? " ms"
-                        : index == 2 ? " st"
-                        : index == 4 ? " Hz"
-                                     : "");
+        configureSlider(sliders[size_t(index)], index, suffixes[size_t(index)]);
         labels[size_t(index)].setText(names[size_t(index)], juce::dontSendNotification);
         addAndMakeVisible(labels[size_t(index)]);
     }
-    sliders[7].setRange(0, 65535, 1);
     sliders[7].setNumDecimalPlacesToDisplay(0);
     sliders[7].setTooltip("Integer seeds 0-65535 reproduce grain scatter, pitch variation and pan "
                           "events after reset.");
@@ -71,17 +64,18 @@ void GhostDelayEditor::updateSpectrumVisibility() {
         stopTimer();
 }
 
-void GhostDelayEditor::configureSlider(juce::Slider &slider, int index, double minimum,
-                                       double maximum, const juce::String &suffix) {
+void GhostDelayEditor::configureSlider(juce::Slider &slider, int index,
+                                       const juce::String &suffix) {
     addAndMakeVisible(slider);
     slider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
     slider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 120, 26);
-    slider.setRange(minimum, maximum);
     slider.setTextValueSuffix(suffix);
     slider.setNumDecimalPlacesToDisplay(index == 1 ? 1 : 3);
     constexpr std::array<const char *, 9> ids{
         "grain", "delay", "pitch", "scatter", "density", "feedback", "randomness", "seed", "mix"};
     auto *parameter = processor.getParameters().getParameter(ids[size_t(index)]);
+    const auto &range = parameter->getNormalisableRange();
+    slider.setRange(range.start, range.end, range.interval);
     slider.onDragStart = [this, parameter] {
         dragBefore = processor.readValues();
         dragging = true;

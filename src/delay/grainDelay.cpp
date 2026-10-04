@@ -6,24 +6,13 @@
 #include <numbers>
 
 namespace ahq::audio {
-namespace {
 
-bool validParameters(const GrainDelayParameters &parameters) noexcept {
-    return std::isfinite(parameters.grainMs) && parameters.grainMs >= 20.0F &&
-           parameters.grainMs <= 500.0F && std::isfinite(parameters.delayMs) &&
-           parameters.delayMs >= 10.0F && parameters.delayMs <= 2000.0F &&
-           std::isfinite(parameters.pitchSemitones) && parameters.pitchSemitones >= -24.0F &&
-           parameters.pitchSemitones <= 24.0F && std::isfinite(parameters.scatter) &&
-           parameters.scatter >= 0.0F && parameters.scatter <= 1.0F &&
-           std::isfinite(parameters.densityHz) && parameters.densityHz >= 1.0F &&
-           parameters.densityHz <= 80.0F && std::isfinite(parameters.feedback) &&
-           parameters.feedback >= 0.0F && parameters.feedback <= 0.95F &&
-           std::isfinite(parameters.randomness) && parameters.randomness >= 0.0F &&
-           parameters.randomness <= 1.0F && std::isfinite(parameters.mix) &&
-           parameters.mix >= 0.0F && parameters.mix <= 1.0F;
+bool GrainDelayParameters::isValid() const noexcept {
+    return grainMsRange.contains(grainMs) && delayMsRange.contains(delayMs) &&
+           pitchSemitonesRange.contains(pitchSemitones) && scatterRange.contains(scatter) &&
+           densityHzRange.contains(densityHz) && feedbackRange.contains(feedback) &&
+           randomnessRange.contains(randomness) && mixRange.contains(mix);
 }
-
-} // namespace
 
 bool GrainDelay::prepare(double sampleRate) noexcept {
     if (!std::isfinite(sampleRate) || sampleRate < 8000.0 || sampleRate > 384000.0) {
@@ -45,7 +34,7 @@ bool GrainDelay::prepare(double sampleRate) noexcept {
 }
 
 bool GrainDelay::setParameters(const GrainDelayParameters &parameters) noexcept {
-    if (transitionFrames_ == 0 || !validParameters(parameters)) {
+    if (transitionFrames_ == 0 || !parameters.isValid()) {
         return false;
     }
     if (parameters.seed != parameters_.seed) {

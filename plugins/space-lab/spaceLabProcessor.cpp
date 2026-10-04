@@ -20,20 +20,29 @@ ahq::audio::SpaceLabParameters coreParameters(const SpaceLabProcessor::Values &v
 } // namespace
 
 juce::AudioProcessorValueTreeState::ParameterLayout SpaceLabProcessor::createParameterLayout() {
+    using Parameters = ahq::audio::SpaceLabParameters;
     juce::AudioProcessorValueTreeState::ParameterLayout layout;
     constexpr std::array<const char *, 10> names{
         "Width",        "Signed Haas",     "Left tilt",        "Right tilt", "Invert left",
         "Invert right", "Modulation rate", "Modulation depth", "Split mono", "Mix"};
-    constexpr std::array<float, 10> minimum{0, -30, -12, -12, 0, 0, 0, 0, 0, 0},
-        maximum{3, 30, 12, 12, 1, 1, 10, 20, 1, 1};
+    constexpr std::array<ahq::audio::ParameterRange, 10> ranges{{Parameters::widthRange,
+                                                                 Parameters::signedHaasMsRange,
+                                                                 Parameters::leftTiltDbRange,
+                                                                 Parameters::rightTiltDbRange,
+                                                                 {0, 1, 1},
+                                                                 {0, 1, 1},
+                                                                 Parameters::modRateHzRange,
+                                                                 Parameters::modDepthMsRange,
+                                                                 {0, 1, 1},
+                                                                 Parameters::mixRange}};
     for (size_t i = 0; i < 10; ++i) {
         if (i == 4 || i == 5 || i == 8)
             layout.add(std::make_unique<juce::AudioParameterBool>(
                 juce::ParameterID{parameterIds[i], 1}, names[i], false));
         else
             layout.add(std::make_unique<juce::AudioParameterFloat>(
-                juce::ParameterID{parameterIds[i], 1}, names[i],
-                juce::NormalisableRange<float>(minimum[i], maximum[i]), factoryValues[0][i]));
+                juce::ParameterID{parameterIds[i], 1}, names[i], toJuceRange(ranges[i]),
+                factoryValues[0][i]));
     }
     return layout;
 }
@@ -42,7 +51,7 @@ SpaceLabProcessor::SpaceLabProcessor()
                          .withInput("Input", juce::AudioChannelSet::stereo(), true)
                          .withOutput("Output", juce::AudioChannelSet::stereo(), true)),
       parameters(*this, nullptr, "SpaceLabParameters", createParameterLayout()),
-      state(parameters, parameterIds, "AHQSpaceLabState", validateValues, currentProgram) {
+      state(parameters, parameterIds, "AHQSpaceLabState", currentProgram) {
     setLatencySamples(0);
 }
 
@@ -53,7 +62,7 @@ void SpaceLabProcessor::prepareToPlay(double rate, int) {
     prepared = filter.prepare(rate);
     if (prepared) {
         const auto v = readValues();
-        prepared = validateValues(v) && filter.setParameters(coreParameters(v));
+        prepared = state.validateValues(v) && filter.setParameters(coreParameters(v));
         filter.reset();
     }
 }
@@ -77,7 +86,7 @@ void SpaceLabProcessor::processAudio(juce::AudioBuffer<float> &buffer, bool bypa
         buffer.copyFrom(1, 0, buffer, 0, 0, buffer.getNumSamples());
     const float inputPeak = PluginAnalysis::peak(buffer);
     const auto v = readValues();
-    if (prepared && validateValues(v)) {
+    if (prepared && state.validateValues(v)) {
         (void)filter.setParameters(coreParameters(v));
         if (!bypassed) {
             const size_t count = size_t(buffer.getNumSamples());
@@ -101,17 +110,6 @@ void SpaceLabProcessor::processAudio(juce::AudioBuffer<float> &buffer, bool bypa
 // Conservative -80 dB estimate for 1 kHz one-pole EQ plus maximum creative delay and smoothing.
 // IIR decay is asymptotic; 0.1 seconds is an estimate, not a strict finite impulse duration.
 double SpaceLabProcessor::getTailLengthSeconds() const { return 0.1; }
-bool SpaceLabProcessor::validateValues(std::span<const float> v) noexcept {
-    if (v.size() != 10)
-        return false;
-    for (float value : v)
-        if (!std::isfinite(value))
-            return false;
-    return v[0] >= 0 && v[0] <= 3 && v[1] >= -30 && v[1] <= 30 && v[2] >= -12 && v[2] <= 12 &&
-           v[3] >= -12 && v[3] <= 12 && (v[4] == 0 || v[4] == 1) && (v[5] == 0 || v[5] == 1) &&
-           v[6] >= 0 && v[6] <= 10 && v[7] >= 0 && v[7] <= 20 && (v[8] == 0 || v[8] == 1) &&
-           v[9] >= 0 && v[9] <= 1;
-}
 int SpaceLabProcessor::getNumPrograms() { return static_cast<int>(factoryValues.size()); }
 const juce::String SpaceLabProcessor::getProgramName(int index) {
     return juce::isPositiveAndBelow(index, getNumPrograms()) ? presetNames[size_t(index)] : "";

@@ -4,6 +4,12 @@
 插件层。一个仓库分别生成每个插件，Linux 构建目标为 VST3、LV2 和 Standalone。
 核心与插件封装分开，单独测试 DSP 时不需要下载 JUCE。
 
+`src/` 按处理类别分为 `common`、`filters`、`dynamics`、`distortion`、`spatial`、
+`delay`、`creative` 和 `metering`。每个插件的处理器与界面放在各自的
+`plugins/<插件名>/` 中，共用状态与显示代码放在 `plugins/common/`。
+`tests/core/` 按相同类别组织核心测试，`tests/plugins/` 存放插件测试；公开头文件
+仍位于 `include/ahq/audio/`，现有包含路径保持不变。
+
 | 插件 | 当前处理能力 |
 | --- | --- |
 | Quick Filter | HP/LP、Frequency、Q、12/24/36/48 dB/oct、Dry/Wet |

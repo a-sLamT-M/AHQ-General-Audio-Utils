@@ -1,5 +1,7 @@
 #pragma once
 
+#include "ahq/audio/parameterRange.h"
+
 #include "ahq/audio/linearSmoother.h"
 
 #include <array>
@@ -19,6 +21,16 @@ struct GrainDelayParameters {
     float randomness = 0.0F;
     std::uint32_t seed = 1;
     float mix = 0.5F;
+
+    static constexpr ParameterRange grainMsRange{20, 500};
+    static constexpr ParameterRange delayMsRange{10, 2000};
+    static constexpr ParameterRange pitchSemitonesRange{-24, 24};
+    static constexpr ParameterRange scatterRange{0, 1};
+    static constexpr ParameterRange densityHzRange{1, 80};
+    static constexpr ParameterRange feedbackRange{0, 0.95F};
+    static constexpr ParameterRange randomnessRange{0, 1};
+    static constexpr ParameterRange mixRange{0, 1};
+    [[nodiscard]] bool isValid() const noexcept;
 };
 
 /// Creative Hann-windowed granular delay with a fixed 64-grain limit and linked stereo events.

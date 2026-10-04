@@ -3,14 +3,25 @@
 #include <charconv>
 PluginState::PluginState(juce::AudioProcessorValueTreeState &parameters,
                          std::span<const char *const> parameterIds, const char *tag,
-                         Validator validate, std::atomic<int> &program)
-    : ids(parameterIds.begin(), parameterIds.end()), xmlTag(tag), validator(validate),
+                         std::atomic<int> &program)
+    : ids(parameterIds.begin(), parameterIds.end()), xmlTag(tag), parameterRanges(ids.size()),
       currentProgram(program), rawParameters(ids.size()), rangedParameters(ids.size()) {
     for (size_t index = 0; index < ids.size(); ++index) {
         rawParameters[index] = parameters.getRawParameterValue(ids[index]);
         rangedParameters[index] = parameters.getParameter(ids[index]);
+        const auto &range = rangedParameters[index]->getNormalisableRange();
+        parameterRanges[index] = {range.start, range.end, range.interval};
     }
 }
+bool PluginState::validateValues(std::span<const float> values) const noexcept {
+    if (values.size() != parameterRanges.size())
+        return false;
+    for (size_t index = 0; index < values.size(); ++index)
+        if (!parameterRanges[index].contains(values[index]))
+            return false;
+    return true;
+}
+
 class PluginState::ParameterEdit final : public juce::UndoableAction {
   public:
     ParameterEdit(PluginState &owner, Values previous, Values next, bool alreadyApplied = false)
@@ -71,7 +82,7 @@ bool PluginState::decodeXml(const juce::XmlElement &xml, Values &values) {
         if (parsed.ec != std::errc{} || parsed.ptr != text.data() + text.size())
             return false;
     }
-    return validator(values);
+    return validateValues(values);
 }
 
 void PluginState::writeValues(std::span<const float> values, bool notifyHost) {
@@ -97,7 +108,7 @@ void PluginState::writeParameter(size_t index, float value, bool notifyHost) {
 
 bool PluginState::applyUserValues(std::span<const float> values, const juce::String &name) {
     jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
-    if (values.size() != ids.size() || !validator(values))
+    if (values.size() != ids.size() || !validateValues(values))
         return false;
     if (historyRevision != stateRevision.load()) {
         undoManager.clearUndoHistory();
@@ -126,7 +137,7 @@ void PluginState::recordUserEdit(std::span<const float> previous, int parameterI
         return;
     auto before = after;
     before[size_t(parameterIndex)] = previous[size_t(parameterIndex)];
-    if (before != after && validator(before)) {
+    if (before != after && validateValues(before)) {
         undoManager.beginNewTransaction(name);
         undoManager.perform(new ParameterEdit(*this, before, after, true));
     }

@@ -17,21 +17,12 @@ juce::AudioProcessorValueTreeState::ParameterLayout MasterScopeProcessor::create
         juce::ParameterID{"scope", 1}, "Scope coordinates", juce::StringArray{"L/R", "M/S"}, 0));
     return l;
 }
-bool MasterScopeProcessor::validateValues(std::span<const float> v) noexcept {
-    if (v.size() != 3)
-        return false;
-    for (float f : v)
-        if (f != 0 && f != 1)
-            return false;
-    return true;
-}
 MasterScopeProcessor::MasterScopeProcessor(bool enableWorker)
     : AudioProcessor(BusesProperties()
                          .withInput("Input", juce::AudioChannelSet::stereo(), true)
                          .withOutput("Output", juce::AudioChannelSet::stereo(), true)),
       parameters(*this, nullptr, "MasterScopeParameters", createParameterLayout()),
-      state(parameters, ids, "AHQMasterScopeState", validateValues, program),
-      workerEnabled(enableWorker) {}
+      state(parameters, ids, "AHQMasterScopeState", program), workerEnabled(enableWorker) {}
 MasterScopeProcessor::~MasterScopeProcessor() { stopWorker(); }
 void MasterScopeProcessor::stopWorker() {
     stopping.store(true, std::memory_order_release);

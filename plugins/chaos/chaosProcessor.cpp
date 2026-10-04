@@ -21,23 +21,33 @@ ahq::audio::ChaosParameters coreParameters(const ChaosProcessor::Values &v) noex
 } // namespace
 
 juce::AudioProcessorValueTreeState::ParameterLayout ChaosProcessor::createParameterLayout() {
+    using Parameters = ahq::audio::ChaosParameters;
     juce::AudioProcessorValueTreeState::ParameterLayout layout;
     constexpr std::array<const char *, 10> names{"Slice length", "Slice probability",
                                                  "Repeats",      "Reverse probability",
                                                  "Pitch range",  "Pan amount",
                                                  "Drive",        "Distortion probability",
                                                  "Seed",         "Mix"};
-    constexpr std::array<float, 10> low{10, 0, 1, 0, 0, 0, 0, 0, 0, 0},
-        high{250, 1, 8, 1, 24, 1, 36, 1, 65535, 1};
+    constexpr std::array<ahq::audio::ParameterRange, 10> ranges{
+        {Parameters::sliceMsRange,
+         Parameters::probabilityRange,
+         Parameters::repeatsRange,
+         Parameters::reverseProbabilityRange,
+         Parameters::pitchRangeSemitonesRange,
+         Parameters::panAmountRange,
+         Parameters::driveDbRange,
+         Parameters::distortionProbabilityRange,
+         {0, 65535, 1},
+         Parameters::mixRange}};
     for (size_t i = 0; i < parameterIds.size(); ++i) {
         if (i == 2 || i == 8)
             layout.add(std::make_unique<juce::AudioParameterInt>(
-                juce::ParameterID{parameterIds[i], 1}, names[i], int(low[i]), int(high[i]),
-                int(factoryValues[0][i])));
+                juce::ParameterID{parameterIds[i], 1}, names[i], int(ranges[i].minimum),
+                int(ranges[i].maximum), int(factoryValues[0][i])));
         else
             layout.add(std::make_unique<juce::AudioParameterFloat>(
-                juce::ParameterID{parameterIds[i], 1}, names[i],
-                juce::NormalisableRange<float>(low[i], high[i]), factoryValues[0][i]));
+                juce::ParameterID{parameterIds[i], 1}, names[i], toJuceRange(ranges[i]),
+                factoryValues[0][i]));
     }
     return layout;
 }
@@ -46,7 +56,7 @@ ChaosProcessor::ChaosProcessor()
                          .withInput("Input", juce::AudioChannelSet::stereo(), true)
                          .withOutput("Output", juce::AudioChannelSet::stereo(), true)),
       parameters(*this, nullptr, "ChaosParameters", createParameterLayout()),
-      state(parameters, parameterIds, "AHQChaosState", validateValues, currentProgram) {
+      state(parameters, parameterIds, "AHQChaosState", currentProgram) {
     setLatencySamples(0);
 }
 
@@ -57,7 +67,7 @@ void ChaosProcessor::prepareToPlay(double rate, int) {
     prepared = filter.prepare(rate);
     if (prepared) {
         const auto v = readValues();
-        prepared = validateValues(v) && filter.setParameters(coreParameters(v));
+        prepared = state.validateValues(v) && filter.setParameters(coreParameters(v));
         filter.reset();
     }
 }
@@ -79,7 +89,7 @@ void ChaosProcessor::processAudio(juce::AudioBuffer<float> &buffer, bool bypasse
         return;
     const float inputPeak = PluginAnalysis::peak(buffer);
     const auto v = readValues();
-    if (prepared && validateValues(v)) {
+    if (prepared && state.validateValues(v)) {
         (void)filter.setParameters(coreParameters(v));
         if (!bypassed) {
             const size_t count = size_t(buffer.getNumSamples());
@@ -103,17 +113,6 @@ void ChaosProcessor::processAudio(juce::AudioBuffer<float> &buffer, bool bypasse
 // Conservative silence tail: nine seconds of history plus the longest 8.25-second event.
 // Zero input can still capture past audio until it leaves history; there is no feedback.
 double ChaosProcessor::getTailLengthSeconds() const { return 17.25; }
-bool ChaosProcessor::validateValues(std::span<const float> v) noexcept {
-    if (v.size() != 10)
-        return false;
-    for (float x : v)
-        if (!std::isfinite(x))
-            return false;
-    return v[0] >= 10 && v[0] <= 250 && v[1] >= 0 && v[1] <= 1 && v[2] >= 1 && v[2] <= 8 &&
-           v[2] == std::floor(v[2]) && v[3] >= 0 && v[3] <= 1 && v[4] >= 0 && v[4] <= 24 &&
-           v[5] >= 0 && v[5] <= 1 && v[6] >= 0 && v[6] <= 36 && v[7] >= 0 && v[7] <= 1 &&
-           v[8] >= 0 && v[8] <= 65535 && v[8] == std::floor(v[8]) && v[9] >= 0 && v[9] <= 1;
-}
 int ChaosProcessor::getNumPrograms() { return static_cast<int>(factoryValues.size()); }
 const juce::String ChaosProcessor::getProgramName(int index) {
     return juce::isPositiveAndBelow(index, getNumPrograms()) ? presetNames[size_t(index)] : "";

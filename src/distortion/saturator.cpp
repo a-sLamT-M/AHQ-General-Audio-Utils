@@ -5,6 +5,12 @@
 #include <numbers>
 
 namespace ahq::audio {
+
+bool SaturatorParameters::isValid() const noexcept {
+    return modelRange.contains(static_cast<int>(model)) && driveDbRange.contains(driveDb) &&
+           biasRange.contains(bias) && toneRange.contains(tone) && mixRange.contains(mix);
+}
+
 namespace {
 
 // sinc(0.5 * (n-16)) * 0.5, Hamming window; odd taps normalized to sum 0.5,
@@ -16,15 +22,6 @@ constexpr std::array<double, 33> HALF_BAND{
     0.0, -0.098154459727262722, 0.0, 0.050790255751729817,  0.0, -0.028717095530917582,
     0.0, 0.015969656317533235,  0.0, -0.008254117892324827, 0.0, 0.003867938184033391,
     0.0, -0.001890547042313345, 0.0};
-
-bool validParameters(const SaturatorParameters &parameters) noexcept {
-    const int model = static_cast<int>(parameters.model);
-    return model >= 0 && model < 7 && std::isfinite(parameters.driveDb) &&
-           parameters.driveDb >= 0.0F && parameters.driveDb <= 36.0F &&
-           std::isfinite(parameters.bias) && parameters.bias >= -1.0F && parameters.bias <= 1.0F &&
-           std::isfinite(parameters.tone) && parameters.tone >= -1.0F && parameters.tone <= 1.0F &&
-           std::isfinite(parameters.mix) && parameters.mix >= 0.0F && parameters.mix <= 1.0F;
-}
 
 } // namespace
 
@@ -49,13 +46,21 @@ bool Saturator::prepare(double sampleRate, OversamplingFactor factor) noexcept {
         return false;
     }
     factor_ = factor;
-    latencySamples_ = factor == OversamplingFactor::x1   ? 0
-                      : factor == OversamplingFactor::x2 ? 16
-                                                         : 24;
+    double highSampleRate = sampleRate;
+    switch (factor) {
+    case OversamplingFactor::x1:
+        latencySamples_ = 0;
+        break;
+    case OversamplingFactor::x2:
+        latencySamples_ = 16;
+        highSampleRate *= 2.0;
+        break;
+    case OversamplingFactor::x4:
+        latencySamples_ = 24;
+        highSampleRate *= 4.0;
+        break;
+    }
     transitionFrames_ = static_cast<std::uint32_t>(std::ceil(sampleRate * 0.005));
-    const double highSampleRate = sampleRate * (factor == OversamplingFactor::x1   ? 1.0
-                                                : factor == OversamplingFactor::x2 ? 2.0
-                                                                                   : 4.0);
     toneCoefficient_ =
         -std::expm1(-2.0 * std::numbers::pi * std::min(2000.0, sampleRate * 0.2) / highSampleRate);
     reset();
@@ -63,7 +68,7 @@ bool Saturator::prepare(double sampleRate, OversamplingFactor factor) noexcept {
 }
 
 bool Saturator::setParameters(const SaturatorParameters &parameters) noexcept {
-    if (transitionFrames_ == 0 || !validParameters(parameters)) {
+    if (transitionFrames_ == 0 || !parameters.isValid()) {
         return false;
     }
     const bool modelChanged = parameters.model != parameters_.model;
@@ -198,9 +203,11 @@ bool Saturator::process(std::span<float> left, std::span<float> right) noexcept 
             --remainingModelFrames_;
             const auto selected = static_cast<std::size_t>(parameters_.model);
             for (std::size_t model = 0; model < weights_.size(); ++model) {
-                weights_[model] = remainingModelFrames_ == 0
-                                      ? (model == selected ? 1.0 : 0.0)
-                                      : weights_[model] + weightSteps_[model];
+                if (remainingModelFrames_ == 0) {
+                    weights_[model] = model == selected ? 1.0 : 0.0;
+                } else {
+                    weights_[model] += weightSteps_[model];
+                }
             }
         }
         const double wetLeft = processWet(left[frame], channels_[0], drive, bias, tone);

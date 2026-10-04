@@ -7,28 +7,36 @@
 namespace {
 constexpr std::array<const char *, 8> IDS{"ceiling",   "target",  "live",    "gain",
                                           "lookahead", "release", "quality", "mix"};
-unsigned quality(float choice) { return choice == 0 ? 4 : choice == 1 ? 8 : 16; }
+unsigned quality(float choice) {
+    if (choice == 0)
+        return 4;
+    if (choice == 1)
+        return 8;
+    return 16;
+}
 ahq::audio::TrueLimiterParameters core(const TrueLimiterProcessor::Values &v) {
     return {v[0], v[5], v[3], v[7], v[2] != 0, v[1]};
 }
 } // namespace
 
 juce::AudioProcessorValueTreeState::ParameterLayout TrueLimiterProcessor::createLayout() {
+    using Parameters = ahq::audio::TrueLimiterParameters;
     juce::AudioProcessorValueTreeState::ParameterLayout layout;
-    auto add = [&](const char *id, const char *name, float lo, float hi, float value) {
-        layout.add(std::make_unique<juce::AudioParameterFloat>(
-            juce::ParameterID{id, 1}, name, juce::NormalisableRange<float>(lo, hi), value));
+    auto add = [&](const char *id, const char *name, ahq::audio::ParameterRange range,
+                   float value) {
+        layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID{id, 1}, name,
+                                                               toJuceRange(range), value));
     };
-    add("ceiling", "Peak ceiling", -24, 0, -1);
-    add("target", "Target loudness", -36, -5, -14);
+    add("ceiling", "Peak ceiling", Parameters::ceilingDbRange, -1);
+    add("target", "Target loudness", Parameters::targetLufsRange, -14);
     layout.add(std::make_unique<juce::AudioParameterBool>(juce::ParameterID{"live", 1},
                                                           "Live short-term LUFS", false));
-    add("gain", "Input gain", -24, 24, 0);
-    add("lookahead", "Lookahead", 0, 20, 5);
-    add("release", "Release", 10, 1000, 100);
+    add("gain", "Input gain", Parameters::inputGainDbRange, 0);
+    add("lookahead", "Lookahead", {0, 20}, 5);
+    add("release", "Release", Parameters::releaseMsRange, 100);
     layout.add(std::make_unique<juce::AudioParameterChoice>(
         juce::ParameterID{"quality", 1}, "Oversampling", juce::StringArray{"4x", "8x", "16x"}, 1));
-    add("mix", "Mix before protection", 0, 1, 1);
+    add("mix", "Mix before protection", Parameters::mixRange, 1);
     return layout;
 }
 TrueLimiterProcessor::TrueLimiterProcessor()
@@ -36,18 +44,8 @@ TrueLimiterProcessor::TrueLimiterProcessor()
                          .withInput("Input", juce::AudioChannelSet::stereo(), true)
                          .withOutput("Output", juce::AudioChannelSet::stereo(), true)),
       parameters(*this, nullptr, "TrueLimiterParameters", createLayout()),
-      state(parameters, IDS, "AHQTrueLimiterState", validateValues, program) {}
+      state(parameters, IDS, "AHQTrueLimiterState", program) {}
 TrueLimiterProcessor::~TrueLimiterProcessor() { cancelFileAnalysis(); }
-bool TrueLimiterProcessor::validateValues(std::span<const float> v) noexcept {
-    if (v.size() != 8)
-        return false;
-    for (float f : v)
-        if (!std::isfinite(f))
-            return false;
-    return v[0] >= -24 && v[0] <= 0 && v[1] >= -36 && v[1] <= -5 && (v[2] == 0 || v[2] == 1) &&
-           v[3] >= -24 && v[3] <= 24 && v[4] >= 0 && v[4] <= 20 && v[5] >= 10 && v[5] <= 1000 &&
-           v[6] >= 0 && v[6] <= 2 && v[6] == std::floor(v[6]) && v[7] >= 0 && v[7] <= 1;
-}
 TrueLimiterProcessor::Values TrueLimiterProcessor::readValues() const noexcept {
     Values values{};
     state.fillValues(values);

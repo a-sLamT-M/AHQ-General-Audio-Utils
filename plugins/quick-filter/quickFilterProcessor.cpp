@@ -14,20 +14,21 @@ constexpr std::array<QuickFilterProcessor::Values, 4> factoryValues{{{0, 1000, 0
 } // namespace
 
 juce::AudioProcessorValueTreeState::ParameterLayout QuickFilterProcessor::createParameterLayout() {
+    using Parameters = ahq::audio::QuickFilterParameters;
     juce::AudioProcessorValueTreeState::ParameterLayout layout;
     layout.add(std::make_unique<juce::AudioParameterChoice>(
         juce::ParameterID{"mode", 1}, "Mode", juce::StringArray{"Low pass", "High pass"}, 0));
-    auto frequencyRange = juce::NormalisableRange<float>(20, 20000);
+    auto frequencyRange = toJuceRange(Parameters::frequencyHzRange);
     frequencyRange.setSkewForCentre(1000);
     layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID{"frequency", 1},
                                                            "Frequency", frequencyRange, 1000));
     layout.add(std::make_unique<juce::AudioParameterFloat>(
-        juce::ParameterID{"q", 1}, "Q", juce::NormalisableRange<float>(0.1F, 10.0F), 0.7071F));
+        juce::ParameterID{"q", 1}, "Q", toJuceRange(Parameters::qRange), 0.7071F));
     layout.add(std::make_unique<juce::AudioParameterChoice>(
         juce::ParameterID{"slope", 1}, "Slope",
         juce::StringArray{"12 dB/oct", "24 dB/oct", "36 dB/oct", "48 dB/oct"}, 0));
-    layout.add(std::make_unique<juce::AudioParameterFloat>(
-        juce::ParameterID{"mix", 1}, "Mix", juce::NormalisableRange<float>(0, 1), 1));
+    layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID{"mix", 1}, "Mix",
+                                                           toJuceRange(Parameters::mixRange), 1));
     return layout;
 }
 
@@ -36,7 +37,7 @@ QuickFilterProcessor::QuickFilterProcessor()
                          .withInput("Input", juce::AudioChannelSet::stereo(), true)
                          .withOutput("Output", juce::AudioChannelSet::stereo(), true)),
       parameters(*this, nullptr, "QuickFilterParameters", createParameterLayout()),
-      state(parameters, parameterIds, "AHQQuickFilterState", validateValues, currentProgram) {
+      state(parameters, parameterIds, "AHQQuickFilterState", currentProgram) {
     setLatencySamples(0);
 }
 
@@ -65,7 +66,7 @@ void QuickFilterProcessor::processBlock(juce::AudioBuffer<float> &buffer, juce::
         return;
     const auto inputPeak = PluginAnalysis::peak(buffer);
     const auto values = readValues();
-    if (prepared && validateValues(values) && buffer.getNumChannels() >= 1 &&
+    if (prepared && state.validateValues(values) && buffer.getNumChannels() >= 1 &&
         buffer.getNumChannels() <= 2) {
         const bool accepted = filter.setParameters(
             {static_cast<ahq::audio::FilterMode>(int(values[0])), values[1], values[2],
@@ -80,17 +81,6 @@ void QuickFilterProcessor::processBlock(juce::AudioBuffer<float> &buffer, juce::
         }
     }
     analysis.publish(buffer, inputPeak);
-}
-
-bool QuickFilterProcessor::validateValues(std::span<const float> values) noexcept {
-    if (values.size() != 5)
-        return false;
-    for (float value : values)
-        if (!std::isfinite(value))
-            return false;
-    return (values[0] == 0 || values[0] == 1) && values[1] >= 20 && values[1] <= 20000 &&
-           values[2] >= 0.1F && values[2] <= 10 && values[3] >= 0 && values[3] <= 3 &&
-           values[3] == std::floor(values[3]) && values[4] >= 0 && values[4] <= 1;
 }
 
 int QuickFilterProcessor::getNumPrograms() { return static_cast<int>(factoryValues.size()); }

@@ -1,6 +1,6 @@
 param(
     [string]$Archive = '.tools/kemar/diffuse.zip',
-    [string]$Output = 'src/data/kemarHorizontal.h'
+    [string]$Output = 'src/spatial/data/kemarHorizontal.h'
 )
 
 $ErrorActionPreference = 'Stop'

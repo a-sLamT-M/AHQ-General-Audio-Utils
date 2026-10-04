@@ -1,5 +1,7 @@
 #pragma once
 
+#include "ahq/audio/parameterRange.h"
+
 #include "ahq/audio/linearSmoother.h"
 
 #include <array>
@@ -17,6 +19,13 @@ struct QuickFilterParameters {
     float q = 0.70710678F;
     FilterSlope slope = FilterSlope::db12;
     float mix = 1.0F;
+
+    static constexpr ParameterRange modeRange{0, 1, 1};
+    static constexpr ParameterRange frequencyHzRange{20, 20000};
+    static constexpr ParameterRange qRange{0.1F, 10};
+    static constexpr ParameterRange slopeRange{0, 3, 1};
+    static constexpr ParameterRange mixRange{0, 1};
+    [[nodiscard]] bool isValid() const noexcept;
 };
 
 /// Mono/stereo TPT state-variable filter with 5 ms parameter and topology transitions.

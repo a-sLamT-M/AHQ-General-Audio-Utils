@@ -71,7 +71,6 @@ class TrueLimiterProcessor final : public juce::AudioProcessor {
 
   private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createLayout();
-    static bool validateValues(std::span<const float>) noexcept;
     void processAudio(juce::AudioBuffer<float> &, bool bypassed);
     void analyzeFile(juce::File, Values);
     juce::AudioProcessorValueTreeState parameters;

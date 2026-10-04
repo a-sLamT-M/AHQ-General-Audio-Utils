@@ -75,6 +75,18 @@ bool testStateAndUndo() {
     invalidValues[2] = std::numeric_limits<float>::quiet_NaN();
     passed &= expect(!processor.applyUserValues(invalidValues, "Invalid"),
                      "reject nonfinite user values");
+    for (const float mode : {-1.0F, 0.5F, 2.0F}) {
+        invalidValues = expected;
+        invalidValues[0] = mode;
+        passed &= expect(!processor.applyUserValues(invalidValues, "Invalid mode") &&
+                             nearValues(processor.readValues(), expected),
+                         "choice validation rejects fractional and out-of-range modes atomically");
+    }
+    auto invalidPreset = juce::parseXML(preset);
+    invalidPreset->setAttribute("slope", 1.5);
+    passed &= expect(!processor.loadPresetXml(invalidPreset->toString()) &&
+                         nearValues(processor.readValues(), expected),
+                     "preset validation rejects fractional choices without changing state");
 
     juce::MemoryBlock state;
     processor.getStateInformation(state);
@@ -264,7 +276,8 @@ bool renderEditor(const juce::File &destination) {
 int main(int argc, char **argv) {
     juce::ScopedJuceInitialiser_GUI initialise;
     bool passed = testStateAndUndo();
-    passed &= testChoiceEditor<QuickFilterProcessor>({{"Low pass", "mode"}, {"12 dB/oct", "slope"}});
+    passed &=
+        testChoiceEditor<QuickFilterProcessor>({{"Low pass", "mode"}, {"12 dB/oct", "slope"}});
     passed &= testHostLifecycle();
     passed &= testSpectrumTransfer();
     passed &= testOfflineRender();

@@ -78,7 +78,6 @@ class MasterScopeProcessor final : public juce::AudioProcessor {
 
   private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
-    static bool validateValues(std::span<const float>) noexcept;
     void stopWorker();
     void workerLoop();
     bool applyReset() noexcept;

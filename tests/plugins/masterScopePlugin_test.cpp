@@ -141,6 +141,11 @@ bool testStateLayoutsAndOverflow() {
         expect(events.values == 0 && events.gestures == 0, "undo sends no unrelated hold events");
     hold->removeListener(&events);
     const auto initial = p.readValues();
+    auto invalidControls = initial;
+    invalidControls[0] = 0.5F;
+    passed &=
+        expect(!p.applyUserValues(invalidControls, "Invalid capture") && p.readValues() == initial,
+               "boolean controls reject fractional values without changing state");
     passed &= expect(p.applyUserValues({0, 0, 1}, "Controls"), "edit controls");
     const auto xml = p.createPresetXml();
     juce::MemoryBlock saved;

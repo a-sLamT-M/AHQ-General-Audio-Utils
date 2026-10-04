@@ -19,6 +19,7 @@ ahq::audio::SaturatorParameters coreParameters(const SaturatorProcessor::Values 
 } // namespace
 
 juce::AudioProcessorValueTreeState::ParameterLayout SaturatorProcessor::createParameterLayout() {
+    using Parameters = ahq::audio::SaturatorParameters;
     juce::AudioProcessorValueTreeState::ParameterLayout layout;
     layout.add(std::make_unique<juce::AudioParameterChoice>(
         juce::ParameterID{"model", 1}, "Model",
@@ -26,15 +27,15 @@ juce::AudioProcessorValueTreeState::ParameterLayout SaturatorProcessor::createPa
                           "Rectifier", "Bitcrusher"},
         0));
     layout.add(std::make_unique<juce::AudioParameterFloat>(
-        juce::ParameterID{"drive", 1}, "Drive", juce::NormalisableRange<float>(0, 36), 0));
-    layout.add(std::make_unique<juce::AudioParameterFloat>(
-        juce::ParameterID{"bias", 1}, "Bias", juce::NormalisableRange<float>(-1, 1), 0));
-    layout.add(std::make_unique<juce::AudioParameterFloat>(
-        juce::ParameterID{"tone", 1}, "Tone", juce::NormalisableRange<float>(-1, 1), 0));
+        juce::ParameterID{"drive", 1}, "Drive", toJuceRange(Parameters::driveDbRange), 0));
+    layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID{"bias", 1}, "Bias",
+                                                           toJuceRange(Parameters::biasRange), 0));
+    layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID{"tone", 1}, "Tone",
+                                                           toJuceRange(Parameters::toneRange), 0));
     layout.add(std::make_unique<juce::AudioParameterChoice>(
         juce::ParameterID{"oversampling", 1}, "Quality", juce::StringArray{"1x", "2x", "4x"}, 1));
-    layout.add(std::make_unique<juce::AudioParameterFloat>(
-        juce::ParameterID{"mix", 1}, "Mix", juce::NormalisableRange<float>(0, 1), 1));
+    layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID{"mix", 1}, "Mix",
+                                                           toJuceRange(Parameters::mixRange), 1));
     return layout;
 }
 SaturatorProcessor::SaturatorProcessor()
@@ -42,7 +43,7 @@ SaturatorProcessor::SaturatorProcessor()
                          .withInput("Input", juce::AudioChannelSet::stereo(), true)
                          .withOutput("Output", juce::AudioChannelSet::stereo(), true)),
       parameters(*this, nullptr, "SaturatorParameters", createParameterLayout()),
-      state(parameters, parameterIds, "AHQSaturatorState", validateValues, currentProgram) {
+      state(parameters, parameterIds, "AHQSaturatorState", currentProgram) {
     setLatencySamples(24);
 }
 
@@ -73,7 +74,8 @@ void SaturatorProcessor::prepareToPlay(double rate, int) {
     activeEngine = 0;
     fading = false;
     fadePosition = 0;
-    prepared = validateValues(lastValues) && initialiseEngine(0, int(lastValues[4]), lastValues);
+    prepared =
+        state.validateValues(lastValues) && initialiseEngine(0, int(lastValues[4]), lastValues);
     fadeFrames = prepared ? std::max(1u, std::uint32_t(std::ceil(rate * 0.005))) : 1;
     mixSmoother.reset(lastValues[5]);
 }
@@ -124,7 +126,7 @@ void SaturatorProcessor::processAudio(juce::AudioBuffer<float> &buffer, bool byp
         return;
     const float inputPeak = PluginAnalysis::peak(buffer);
     const auto requested = readValues();
-    if (validateValues(requested))
+    if (state.validateValues(requested))
         lastValues = requested;
     if (prepared) {
         // Requests during a fade are deferred; the latest block snapshot is accepted only after it
@@ -165,10 +167,13 @@ void SaturatorProcessor::processAudio(juce::AudioBuffer<float> &buffer, bool byp
         }
         const double mix = prepared ? mixSmoother.next() : 0;
         for (size_t channel = 0; channel < size_t(buffer.getNumChannels()); ++channel) {
-            const float output = bypassed || mix == 0 ? dry[channel]
-                                 : mix == 1
-                                     ? wet[channel]
-                                     : float(dry[channel] + (wet[channel] - dry[channel]) * mix);
+            float output = dry[channel];
+            if (!bypassed && mix != 0) {
+                if (mix == 1)
+                    output = wet[channel];
+                else
+                    output = float(dry[channel] + (wet[channel] - dry[channel]) * mix);
+            }
             if (channel == 0)
                 left[frame] = output;
             else
@@ -176,16 +181,6 @@ void SaturatorProcessor::processAudio(juce::AudioBuffer<float> &buffer, bool byp
         }
     }
     analysis.publish(buffer, inputPeak);
-}
-bool SaturatorProcessor::validateValues(std::span<const float> v) noexcept {
-    if (v.size() != 6)
-        return false;
-    for (float value : v)
-        if (!std::isfinite(value))
-            return false;
-    return v[0] >= 0 && v[0] <= 6 && v[0] == std::floor(v[0]) && v[1] >= 0 && v[1] <= 36 &&
-           v[2] >= -1 && v[2] <= 1 && v[3] >= -1 && v[3] <= 1 && v[4] >= 0 && v[4] <= 2 &&
-           v[4] == std::floor(v[4]) && v[5] >= 0 && v[5] <= 1;
 }
 int SaturatorProcessor::getNumPrograms() { return static_cast<int>(factoryValues.size()); }
 const juce::String SaturatorProcessor::getProgramName(int index) {

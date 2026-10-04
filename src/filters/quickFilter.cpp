@@ -5,17 +5,14 @@
 #include <numbers>
 
 namespace ahq::audio {
-namespace {
 
-bool validParameters(const QuickFilterParameters &parameters) noexcept {
-    return (parameters.mode == FilterMode::lowPass || parameters.mode == FilterMode::highPass) &&
-           (parameters.slope == FilterSlope::db12 || parameters.slope == FilterSlope::db24 ||
-            parameters.slope == FilterSlope::db36 || parameters.slope == FilterSlope::db48) &&
-           std::isfinite(parameters.frequencyHz) && parameters.frequencyHz >= 20.0F &&
-           parameters.frequencyHz <= 20000.0F && std::isfinite(parameters.q) &&
-           parameters.q >= 0.1F && parameters.q <= 10.0F && std::isfinite(parameters.mix) &&
-           parameters.mix >= 0.0F && parameters.mix <= 1.0F;
+bool QuickFilterParameters::isValid() const noexcept {
+    return modeRange.contains(static_cast<int>(mode)) && frequencyHzRange.contains(frequencyHz) &&
+           qRange.contains(q) && slopeRange.contains(static_cast<int>(slope)) &&
+           mixRange.contains(mix);
 }
+
+namespace {
 
 std::size_t selectedOutput(const QuickFilterParameters &parameters) noexcept {
     return (parameters.mode == FilterMode::highPass ? 4U : 0U) +
@@ -35,7 +32,7 @@ bool QuickFilter::prepare(double sampleRate) noexcept {
 }
 
 bool QuickFilter::setParameters(const QuickFilterParameters &parameters) noexcept {
-    if (transitionFrames_ == 0 || !validParameters(parameters)) {
+    if (transitionFrames_ == 0 || !parameters.isValid()) {
         return false;
     }
     const bool topologyChanged =
@@ -119,9 +116,11 @@ bool QuickFilter::process(std::span<float> left, std::span<float> right) noexcep
             --remainingTopologyFrames_;
             const std::size_t selected = selectedOutput(parameters_);
             for (std::size_t output = 0; output < weights_.size(); ++output) {
-                weights_[output] = remainingTopologyFrames_ == 0
-                                       ? (output == selected ? 1.0 : 0.0)
-                                       : weights_[output] + weightSteps_[output];
+                if (remainingTopologyFrames_ == 0) {
+                    weights_[output] = output == selected ? 1.0 : 0.0;
+                } else {
+                    weights_[output] += weightSteps_[output];
+                }
             }
         }
         const double mix = mix_.next();

@@ -19,28 +19,28 @@ ahq::audio::GrainDelayParameters coreParameters(const GhostDelayProcessor::Value
 } // namespace
 
 juce::AudioProcessorValueTreeState::ParameterLayout GhostDelayProcessor::createParameterLayout() {
+    using Parameters = ahq::audio::GrainDelayParameters;
     juce::AudioProcessorValueTreeState::ParameterLayout layout;
+    layout.add(std::make_unique<juce::AudioParameterFloat>(
+        juce::ParameterID{"grain", 1}, "Grain length", toJuceRange(Parameters::grainMsRange), 100));
+    layout.add(std::make_unique<juce::AudioParameterFloat>(
+        juce::ParameterID{"delay", 1}, "Delay", toJuceRange(Parameters::delayMsRange), 250));
+    layout.add(std::make_unique<juce::AudioParameterFloat>(
+        juce::ParameterID{"pitch", 1}, "Pitch", toJuceRange(Parameters::pitchSemitonesRange), 0));
+    layout.add(std::make_unique<juce::AudioParameterFloat>(
+        juce::ParameterID{"scatter", 1}, "Scatter", toJuceRange(Parameters::scatterRange), 0.25F));
+    layout.add(std::make_unique<juce::AudioParameterFloat>(
+        juce::ParameterID{"density", 1}, "Density", toJuceRange(Parameters::densityHzRange), 20));
     layout.add(
-        std::make_unique<juce::AudioParameterFloat>(juce::ParameterID{"grain", 1}, "Grain length",
-                                                    juce::NormalisableRange<float>(20, 500), 100));
+        std::make_unique<juce::AudioParameterFloat>(juce::ParameterID{"feedback", 1}, "Feedback",
+                                                    toJuceRange(Parameters::feedbackRange), 0.15F));
     layout.add(std::make_unique<juce::AudioParameterFloat>(
-        juce::ParameterID{"delay", 1}, "Delay", juce::NormalisableRange<float>(10, 2000), 250));
-    layout.add(std::make_unique<juce::AudioParameterFloat>(
-        juce::ParameterID{"pitch", 1}, "Pitch", juce::NormalisableRange<float>(-24, 24), 0));
-    layout.add(std::make_unique<juce::AudioParameterFloat>(
-        juce::ParameterID{"scatter", 1}, "Scatter", juce::NormalisableRange<float>(0, 1), 0.25F));
-    layout.add(std::make_unique<juce::AudioParameterFloat>(
-        juce::ParameterID{"density", 1}, "Density", juce::NormalisableRange<float>(1, 80), 20));
-    layout.add(std::make_unique<juce::AudioParameterFloat>(
-        juce::ParameterID{"feedback", 1}, "Feedback", juce::NormalisableRange<float>(0, 0.95F),
-        0.15F));
-    layout.add(std::make_unique<juce::AudioParameterFloat>(
-        juce::ParameterID{"randomness", 1}, "Randomness", juce::NormalisableRange<float>(0, 1),
+        juce::ParameterID{"randomness", 1}, "Randomness", toJuceRange(Parameters::randomnessRange),
         0.2F));
     layout.add(std::make_unique<juce::AudioParameterInt>(juce::ParameterID{"seed", 1}, "Seed", 0,
                                                          65535, 1));
     layout.add(std::make_unique<juce::AudioParameterFloat>(
-        juce::ParameterID{"mix", 1}, "Mix", juce::NormalisableRange<float>(0, 1), 0.5F));
+        juce::ParameterID{"mix", 1}, "Mix", toJuceRange(Parameters::mixRange), 0.5F));
     return layout;
 }
 GhostDelayProcessor::GhostDelayProcessor()
@@ -48,7 +48,7 @@ GhostDelayProcessor::GhostDelayProcessor()
                          .withInput("Input", juce::AudioChannelSet::stereo(), true)
                          .withOutput("Output", juce::AudioChannelSet::stereo(), true)),
       parameters(*this, nullptr, "GhostDelayParameters", createParameterLayout()),
-      state(parameters, parameterIds, "AHQGhostDelayState", validateValues, currentProgram) {
+      state(parameters, parameterIds, "AHQGhostDelayState", currentProgram) {
     setLatencySamples(0);
 }
 
@@ -59,7 +59,7 @@ void GhostDelayProcessor::prepareToPlay(double rate, int) {
     prepared = filter.prepare(rate);
     if (prepared) {
         const auto v = readValues();
-        prepared = validateValues(v) && filter.setParameters(coreParameters(v));
+        prepared = state.validateValues(v) && filter.setParameters(coreParameters(v));
         filter.reset();
     }
 }
@@ -81,7 +81,7 @@ void GhostDelayProcessor::processAudio(juce::AudioBuffer<float> &buffer, bool by
         return;
     const float inputPeak = PluginAnalysis::peak(buffer);
     const auto v = readValues();
-    if (prepared && validateValues(v)) {
+    if (prepared && state.validateValues(v)) {
         (void)filter.setParameters(coreParameters(v));
         if (!bypassed) {
             const size_t count = size_t(buffer.getNumSamples());
@@ -108,23 +108,12 @@ void GhostDelayProcessor::processAudio(juce::AudioBuffer<float> &buffer, bool by
 // The extra factor of two covers normal input plus the bounded feedback contribution.
 double GhostDelayProcessor::getTailLengthSeconds() const {
     const auto v = readValues();
-    if (!validateValues(v))
+    if (!state.validateValues(v))
         return std::numeric_limits<double>::infinity();
     const double feedback = v[5];
     if (feedback <= 0)
         return 4.5;
     return 4.5 * (1 + std::ceil(std::log(0.0001 / 2.0) / std::log(feedback))) + 0.005;
-}
-bool GhostDelayProcessor::validateValues(std::span<const float> v) noexcept {
-    if (v.size() != 9)
-        return false;
-    for (float value : v)
-        if (!std::isfinite(value))
-            return false;
-    return v[0] >= 20 && v[0] <= 500 && v[1] >= 10 && v[1] <= 2000 && v[2] >= -24 && v[2] <= 24 &&
-           v[3] >= 0 && v[3] <= 1 && v[4] >= 1 && v[4] <= 80 && v[5] >= 0 && v[5] <= 0.95F &&
-           v[6] >= 0 && v[6] <= 1 && v[7] >= 0 && v[7] <= 65535 && v[7] == std::floor(v[7]) &&
-           v[8] >= 0 && v[8] <= 1;
 }
 int GhostDelayProcessor::getNumPrograms() { return static_cast<int>(factoryValues.size()); }
 const juce::String GhostDelayProcessor::getProgramName(int index) {

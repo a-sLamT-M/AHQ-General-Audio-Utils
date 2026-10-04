@@ -1,5 +1,7 @@
 #pragma once
 
+#include "ahq/audio/parameterRange.h"
+
 #include "ahq/audio/linearSmoother.h"
 #include "ahq/audio/loudnessMeter.h"
 
@@ -19,6 +21,13 @@ struct TrueLimiterParameters {
     float mix = 1.0F;
     bool liveLoudness = false;
     float targetLufs = -14.0F;
+
+    static constexpr ParameterRange ceilingDbRange{-24, 0};
+    static constexpr ParameterRange releaseMsRange{10, 1000};
+    static constexpr ParameterRange inputGainDbRange{-24, 24};
+    static constexpr ParameterRange mixRange{0, 1};
+    static constexpr ParameterRange targetLufsRange{-36, -5};
+    [[nodiscard]] bool isValid() const noexcept;
 };
 
 struct LoudnessMatchResult {
