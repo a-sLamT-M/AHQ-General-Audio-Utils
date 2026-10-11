@@ -25,15 +25,33 @@
                 "CMAKE_BUILD_TYPE": "Release",
                 "BUILD_TESTING": "ON"
             }
+        },
+        {
+            "name": "plugins-dev",
+            "displayName": "Plugins development",
+            "inherits": "dev",
+            "binaryDir": "${sourceDir}/build/${hostSystemName}/plugins-dev",
+            "cacheVariables": { "AHQ_BUILD_PLUGINS": "ON" }
+        },
+        {
+            "name": "plugins-release",
+            "displayName": "Plugins release",
+            "inherits": "release",
+            "binaryDir": "${sourceDir}/build/${hostSystemName}/plugins-release",
+            "cacheVariables": { "AHQ_BUILD_PLUGINS": "ON" }
         }
     ],
     "buildPresets": [
         { "name": "dev", "configurePreset": "dev" },
-        { "name": "release", "configurePreset": "release" }
+        { "name": "release", "configurePreset": "release" },
+        { "name": "plugins-dev", "configurePreset": "plugins-dev" },
+        { "name": "plugins-release", "configurePreset": "plugins-release" }
     ],
     "testPresets": [
         { "name": "dev", "configurePreset": "dev", "output": { "outputOnFailure": true } },
-        { "name": "release", "configurePreset": "release", "output": { "outputOnFailure": true } }
+        { "name": "release", "configurePreset": "release", "output": { "outputOnFailure": true } },
+        { "name": "plugins-dev", "configurePreset": "plugins-dev", "output": { "outputOnFailure": true } },
+        { "name": "plugins-release", "configurePreset": "plugins-release", "output": { "outputOnFailure": true } }
     ],
     "workflowPresets": [
         {
@@ -50,6 +68,22 @@
                 { "type": "configure", "name": "release" },
                 { "type": "build", "name": "release" },
                 { "type": "test", "name": "release" }
+            ]
+        },
+        {
+            "name": "plugins-dev",
+            "steps": [
+                { "type": "configure", "name": "plugins-dev" },
+                { "type": "build", "name": "plugins-dev" },
+                { "type": "test", "name": "plugins-dev" }
+            ]
+        },
+        {
+            "name": "plugins-release",
+            "steps": [
+                { "type": "configure", "name": "plugins-release" },
+                { "type": "build", "name": "plugins-release" },
+                { "type": "test", "name": "plugins-release" }
             ]
         }
     ]
