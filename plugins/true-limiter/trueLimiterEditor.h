@@ -1,5 +1,7 @@
 #pragma once
 #include "../common/analysisDisplay.h"
+#include "../common/parameterControl.h"
+#include "../common/ui/presetBar.h"
 #include "trueLimiterProcessor.h"
 #include <juce_audio_utils/juce_audio_utils.h>
 
@@ -9,6 +11,7 @@ class TrueLimiterEditor final : public juce::AudioProcessorEditor,
   public:
     explicit TrueLimiterEditor(TrueLimiterProcessor &);
     ~TrueLimiterEditor() override;
+    int getControlParameterIndex(juce::Component &c) override { return controlParameterIndex(c); }
     void paint(juce::Graphics &) override;
     void resized() override;
     void visibilityChanged() override;
@@ -22,7 +25,9 @@ class TrueLimiterEditor final : public juce::AudioProcessorEditor,
     void componentVisibilityChanged() override { updateSpectrumVisibility(); }
     void updateSpectrumVisibility();
     TrueLimiterProcessor &processor;
-    std::array<juce::Slider, 6> sliders;
+    ahq::ui::PluginTheme appearance{*this, processor.getName()};
+    ahq::ui::PresetBar presetBar{processor, appearance};
+    std::array<ParameterSlider, 6> sliders;
     std::array<juce::Label, 6> labels;
     juce::ToggleButton live{"Live 3 s LUFS"};
     juce::ComboBox quality;

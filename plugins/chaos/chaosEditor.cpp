@@ -4,7 +4,8 @@
 ChaosEditor::ChaosEditor(ChaosProcessor &owner)
     : AudioProcessorEditor(owner), ComponentMovementWatcher(this), processor(owner),
       display(owner.getAnalysis()) {
-    setSize(660, 750);
+    addAndMakeVisible(presetBar);
+    setSize(660, 816);
     constexpr std::array<const char *, 10> names{
         "Slice",      "Probability", "Repeats",        "Reverse chance", "Pitch range",
         "Pan amount", "Drive",       "Distort chance", "Seed (integer)", "Wet mix"};
@@ -36,10 +37,8 @@ ChaosEditor::ChaosEditor(ChaosProcessor &owner)
         processor.loadFactoryPreset(presets.getSelectedId() - 1);
         presets.setSelectedId(0, juce::dontSendNotification);
     };
-    for (auto *button : {&saveButton, &loadButton, &undoButton, &redoButton})
+    for (auto *button : {&undoButton, &redoButton})
         addAndMakeVisible(button);
-    saveButton.onClick = [this] { choosePresetFile(true); };
-    loadButton.onClick = [this] { choosePresetFile(false); };
     undoButton.onClick = [this] {
         processor.undo();
         timerCallback();
@@ -69,7 +68,7 @@ void ChaosEditor::updateSpectrumVisibility() {
         stopTimer();
 }
 
-void ChaosEditor::configureSlider(juce::Slider &slider, int index, const juce::String &suffix) {
+void ChaosEditor::configureSlider(ParameterSlider &slider, int index, const juce::String &suffix) {
     addAndMakeVisible(slider);
     slider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
     slider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 120, 26);
@@ -80,6 +79,7 @@ void ChaosEditor::configureSlider(juce::Slider &slider, int index, const juce::S
                                                "seed",       "mix"};
     slider.setComponentID(ids[size_t(index)]);
     auto *parameter = processor.getParameters().getParameter(ids[size_t(index)]);
+    slider.bindParameter(*parameter);
     const auto &range = parameter->getNormalisableRange();
     slider.setRange(range.start, range.end, range.interval);
     slider.onDragStart = [this, parameter] {
@@ -114,7 +114,7 @@ void ChaosEditor::timerCallback() {
 }
 
 void ChaosEditor::paint(juce::Graphics &graphics) {
-    graphics.fillAll(juce::Colour(0xff24282d));
+    appearance.paintBackground(graphics, getWidth());
     graphics.setColour(juce::Colours::white);
     graphics.setFont(22.0F);
     graphics.drawText("AHQ Chaos", 20, 12, 400, 32, juce::Justification::left);
@@ -130,6 +130,8 @@ void ChaosEditor::paint(juce::Graphics &graphics) {
     }
 }
 void ChaosEditor::resized() {
+    presetBar.setBounds(0, getHeight() - ahq::ui::PresetBar::height, getWidth(),
+                        ahq::ui::PresetBar::height);
     undoButton.setBounds(440, 55, 90, 28);
     redoButton.setBounds(550, 55, 90, 28);
     for (int index = 0; index < 10; ++index) {
@@ -141,41 +143,4 @@ void ChaosEditor::resized() {
         sliders[size_t(index)].setBounds(x, y + 24, width, 113);
     }
     presets.setBounds(20, 475, 250, 28);
-    saveButton.setBounds(285, 475, 125, 28);
-    loadButton.setBounds(425, 475, 125, 28);
-    status.setBounds(20, 502, 620, 16);
-}
-void ChaosEditor::choosePresetFile(bool save) {
-    if (fileChooser != nullptr)
-        return;
-    fileChooser = std::make_unique<juce::FileChooser>(
-        save ? "Save Chaos preset" : "Load Chaos preset", juce::File{}, "*.ahqchaos");
-    juce::Component::SafePointer<ChaosEditor> safeThis(this);
-    const int flags = juce::FileBrowserComponent::canSelectFiles |
-                      (save ? juce::FileBrowserComponent::saveMode |
-                                  juce::FileBrowserComponent::warnAboutOverwriting
-                            : juce::FileBrowserComponent::openMode);
-    fileChooser->launchAsync(flags, [safeThis, save](const juce::FileChooser &chooser) {
-        if (safeThis == nullptr)
-            return;
-        auto &editor = *safeThis.getComponent();
-        auto file = chooser.getResult();
-        if (file != juce::File{}) {
-            bool success = false;
-            if (save) {
-                juce::TemporaryFile temporary(file);
-                success = temporary.getFile().replaceWithText(editor.processor.createPresetXml()) &&
-                          temporary.overwriteTargetFileWithTemporary();
-            } else if (file.getSize() > 0 && file.getSize() <= 65536) {
-                success = editor.processor.loadPresetXml(file.loadFileAsString());
-            }
-            editor.status.setText(success ? "Preset saved/loaded" : "Preset operation failed",
-                                  juce::dontSendNotification);
-        }
-        // Keep the chooser alive until its own completion callback has returned.
-        juce::MessageManager::callAsync([safeThis] {
-            if (safeThis != nullptr)
-                safeThis->fileChooser.reset();
-        });
-    });
 }

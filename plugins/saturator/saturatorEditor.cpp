@@ -4,7 +4,8 @@
 SaturatorEditor::SaturatorEditor(SaturatorProcessor &owner)
     : AudioProcessorEditor(owner), ComponentMovementWatcher(this), processor(owner),
       display(owner.getAnalysis()) {
-    setSize(660, 610);
+    addAndMakeVisible(presetBar);
+    setSize(660, 676);
     constexpr std::array<const char *, 4> names{"Drive", "Bias", "Tone", "Wet mix (0-1)"};
     constexpr std::array<const char *, 4> suffixes{" dB", "", "", ""};
     constexpr std::array<int, 4> indices{1, 2, 3, 5};
@@ -42,10 +43,8 @@ SaturatorEditor::SaturatorEditor(SaturatorProcessor &owner)
         processor.loadFactoryPreset(presets.getSelectedId() - 1);
         presets.setSelectedId(0, juce::dontSendNotification);
     };
-    for (auto *button : {&saveButton, &loadButton, &undoButton, &redoButton})
+    for (auto *button : {&undoButton, &redoButton})
         addAndMakeVisible(button);
-    saveButton.onClick = [this] { choosePresetFile(true); };
-    loadButton.onClick = [this] { choosePresetFile(false); };
     undoButton.onClick = [this] {
         processor.undo();
         timerCallback();
@@ -86,7 +85,8 @@ void SaturatorEditor::updateSpectrumVisibility() {
         stopTimer();
 }
 
-void SaturatorEditor::configureSlider(juce::Slider &slider, int index, const juce::String &suffix) {
+void SaturatorEditor::configureSlider(ParameterSlider &slider, int index,
+                                      const juce::String &suffix) {
     addAndMakeVisible(slider);
     slider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
     slider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 120, 26);
@@ -95,6 +95,7 @@ void SaturatorEditor::configureSlider(juce::Slider &slider, int index, const juc
     constexpr std::array<const char *, 6> ids{"model", "drive",        "bias",
                                               "tone",  "oversampling", "mix"};
     auto *parameter = processor.getParameters().getParameter(ids[size_t(index)]);
+    slider.bindParameter(*parameter);
     const auto &range = parameter->getNormalisableRange();
     slider.setRange(range.start, range.end, range.interval);
     slider.onDragStart = [this, parameter] {
@@ -131,7 +132,7 @@ void SaturatorEditor::timerCallback() {
 }
 
 void SaturatorEditor::paint(juce::Graphics &graphics) {
-    graphics.fillAll(juce::Colour(0xff24282d));
+    appearance.paintBackground(graphics, getWidth());
     graphics.setColour(juce::Colours::white);
     graphics.setFont(22.0F);
     graphics.drawText("AHQ Saturator", 20, 12, 400, 32, juce::Justification::left);
@@ -144,6 +145,8 @@ void SaturatorEditor::paint(juce::Graphics &graphics) {
     display.paintSpectrum(graphics);
 }
 void SaturatorEditor::resized() {
+    presetBar.setBounds(0, getHeight() - ahq::ui::PresetBar::height, getWidth(),
+                        ahq::ui::PresetBar::height);
     undoButton.setBounds(440, 55, 90, 28);
     redoButton.setBounds(550, 55, 90, 28);
     model.setBounds(20, 55, 245, 28);
@@ -153,41 +156,4 @@ void SaturatorEditor::resized() {
         sliders[size_t(index)].setBounds(15 + index * 160, 120, 154, 132);
     }
     presets.setBounds(20, 335, 250, 28);
-    saveButton.setBounds(285, 335, 125, 28);
-    loadButton.setBounds(425, 335, 125, 28);
-    status.setBounds(20, 362, 620, 16);
-}
-void SaturatorEditor::choosePresetFile(bool save) {
-    if (fileChooser != nullptr)
-        return;
-    fileChooser = std::make_unique<juce::FileChooser>(
-        save ? "Save saturator preset" : "Load saturator preset", juce::File{}, "*.ahqsaturator");
-    juce::Component::SafePointer<SaturatorEditor> safeThis(this);
-    const int flags = juce::FileBrowserComponent::canSelectFiles |
-                      (save ? juce::FileBrowserComponent::saveMode |
-                                  juce::FileBrowserComponent::warnAboutOverwriting
-                            : juce::FileBrowserComponent::openMode);
-    fileChooser->launchAsync(flags, [safeThis, save](const juce::FileChooser &chooser) {
-        if (safeThis == nullptr)
-            return;
-        auto &editor = *safeThis.getComponent();
-        auto file = chooser.getResult();
-        if (file != juce::File{}) {
-            bool success = false;
-            if (save) {
-                juce::TemporaryFile temporary(file);
-                success = temporary.getFile().replaceWithText(editor.processor.createPresetXml()) &&
-                          temporary.overwriteTargetFileWithTemporary();
-            } else if (file.getSize() > 0 && file.getSize() <= 65536) {
-                success = editor.processor.loadPresetXml(file.loadFileAsString());
-            }
-            editor.status.setText(success ? "Preset saved/loaded" : "Preset operation failed",
-                                  juce::dontSendNotification);
-        }
-        // Keep the chooser alive until its own completion callback has returned.
-        juce::MessageManager::callAsync([safeThis] {
-            if (safeThis != nullptr)
-                safeThis->fileChooser.reset();
-        });
-    });
 }

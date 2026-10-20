@@ -1,5 +1,7 @@
 #pragma once
 #include "../common/analysisDisplay.h"
+#include "../common/parameterControl.h"
+#include "../common/ui/presetBar.h"
 #include "quickFilterProcessor.h"
 #include <juce_audio_utils/juce_audio_utils.h>
 
@@ -10,6 +12,7 @@ class QuickFilterEditor final : public juce::AudioProcessorEditor,
   public:
     explicit QuickFilterEditor(QuickFilterProcessor &);
     ~QuickFilterEditor() override;
+    int getControlParameterIndex(juce::Component &c) override { return controlParameterIndex(c); }
     void paint(juce::Graphics &) override;
     void resized() override;
     void visibilityChanged() override;
@@ -21,17 +24,16 @@ class QuickFilterEditor final : public juce::AudioProcessorEditor,
     void componentPeerChanged() override { updateSpectrumVisibility(); }
     void componentVisibilityChanged() override { updateSpectrumVisibility(); }
     void updateSpectrumVisibility();
-    void choosePresetFile(bool save);
-    void configureSlider(juce::Slider &, int index, const juce::String &suffix);
+    void configureSlider(ParameterSlider &, int index, const juce::String &suffix);
     QuickFilterProcessor &processor;
-    juce::Slider frequency, q, mix;
+    ahq::ui::PluginTheme appearance{*this, processor.getName()};
+    ahq::ui::PresetBar presetBar{processor, appearance};
+    ParameterSlider frequency, q, mix;
     juce::ComboBox mode, slope, presets;
     std::unique_ptr<juce::ParameterAttachment> modeAttachment, slopeAttachment;
-    juce::TextButton saveButton{"Save preset"}, loadButton{"Load preset"};
     juce::TextButton undoButton{"Undo"}, redoButton{"Redo"};
-    juce::Label frequencyLabel, qLabel, mixLabel, status;
+    juce::Label frequencyLabel, qLabel, mixLabel;
     juce::TooltipWindow tooltipWindow{this, 700};
-    std::unique_ptr<juce::FileChooser> fileChooser;
     QuickFilterProcessor::Values dragBefore{};
     bool dragging = false;
     AnalysisDisplay display;

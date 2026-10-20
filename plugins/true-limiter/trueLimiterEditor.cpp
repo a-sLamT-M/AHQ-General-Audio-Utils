@@ -10,7 +10,8 @@ juce::String lufs(double value) { return std::isfinite(value) ? juce::String(val
 TrueLimiterEditor::TrueLimiterEditor(TrueLimiterProcessor &owner)
     : AudioProcessorEditor(owner), ComponentMovementWatcher(this), processor(owner),
       display(owner.getAnalysis()) {
-    setSize(720, 980);
+    addAndMakeVisible(presetBar);
+    setSize(720, 1046);
     constexpr std::array<const char *, 6> names{"Peak ceiling", "Target LUFS",
                                                 "Input gain",   "Lookahead",
                                                 "Release",      "Mix before protection"};
@@ -25,6 +26,7 @@ TrueLimiterEditor::TrueLimiterEditor(TrueLimiterProcessor &owner)
         slider.setNumDecimalPlacesToDisplay(2);
         slider.setTextValueSuffix(suffixes[i]);
         auto *parameter = processor.getParameters().getParameter(IDS[i]);
+        slider.bindParameter(*parameter);
         const auto &range = parameter->getNormalisableRange();
         slider.setRange(range.start, range.end, range.interval);
         slider.onDragStart = [this, parameter] {
@@ -164,7 +166,7 @@ void TrueLimiterEditor::timerCallback() {
     repaint();
 }
 void TrueLimiterEditor::paint(juce::Graphics &g) {
-    g.fillAll(juce::Colour(0xff24282d));
+    appearance.paintBackground(g, getWidth());
     g.setColour(juce::Colours::white);
     g.setFont(juce::FontOptions(23.0F));
     g.drawText("AHQ True Limiter", 20, 12, 450, 32, juce::Justification::left);
@@ -180,6 +182,8 @@ void TrueLimiterEditor::paint(juce::Graphics &g) {
     }
 }
 void TrueLimiterEditor::resized() {
+    presetBar.setBounds(0, getHeight() - ahq::ui::PresetBar::height, getWidth(),
+                        ahq::ui::PresetBar::height);
     undo.setBounds(510, 16, 85, 28);
     redo.setBounds(610, 16, 85, 28);
     live.setBounds(20, 55, 220, 28);

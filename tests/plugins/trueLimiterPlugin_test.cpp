@@ -1,5 +1,6 @@
 #include "choiceEditor_test.h"
 #include "trueLimiterProcessor.h"
+#include "userPreset_test.h"
 #include <cmath>
 #include <iostream>
 #include <numbers>
@@ -277,6 +278,8 @@ bool renderEditor(const juce::File &destination) {
 } // namespace
 int main(int argc, char **argv) {
     juce::ScopedJuceInitialiser_GUI initialise;
+    if (!testUserPresetLibrary<TrueLimiterProcessor>())
+        return 1;
     const bool choicesPassed = testChoiceEditor<TrueLimiterProcessor>({{"4x", "quality"}});
     bool passed = testState();
     passed &= testAudioAndBypass();

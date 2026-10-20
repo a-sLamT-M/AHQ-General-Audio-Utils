@@ -15,8 +15,13 @@ class PluginState {
     void fillValues(std::span<float>) const noexcept;
     juce::String createPresetXml() const;
     bool loadPresetXml(const juce::String &, bool undoable);
+    bool decodePresetXml(const juce::String &, Values &) const;
+    bool applyUserPreset(juce::String before, juce::String after,
+                         std::function<bool(const juce::String &)> restore);
     bool applyUserValues(std::span<const float>, const juce::String &);
+    bool performUserAction(juce::UndoableAction *, const juce::String &);
     void recordUserEdit(std::span<const float>, int, const juce::String &);
+    void recordUserEdit(std::span<const float>, std::span<const int>, const juce::String &);
     void getStateInformation(juce::MemoryBlock &);
     void setStateInformation(const void *, int);
     void writeValues(std::span<const float>, bool notifyHost);
@@ -33,7 +38,7 @@ class PluginState {
   private:
     class ParameterEdit;
     Values readValues() const;
-    bool decodeXml(const juce::XmlElement &, Values &);
+    bool decodeXml(const juce::XmlElement &, Values &) const;
     void writeParameter(size_t index, float value, bool notifyHost);
     std::vector<const char *> ids;
     juce::String xmlTag;

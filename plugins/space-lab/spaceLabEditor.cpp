@@ -19,7 +19,8 @@ int toggleIndexForParameter(int index) {
 SpaceLabEditor::SpaceLabEditor(SpaceLabProcessor &owner)
     : AudioProcessorEditor(owner), ComponentMovementWatcher(this), processor(owner),
       display(owner.getAnalysis()) {
-    setSize(660, 750);
+    addAndMakeVisible(presetBar);
+    setSize(660, 816);
     constexpr std::array<const char *, 10> names{
         "Width",        "Signed Haas", "Left tilt", "Right tilt", "Invert left",
         "Invert right", "Mod rate",    "Mod depth", "Split mono", "Wet mix"};
@@ -65,10 +66,8 @@ SpaceLabEditor::SpaceLabEditor(SpaceLabProcessor &owner)
         processor.loadFactoryPreset(presets.getSelectedId() - 1);
         presets.setSelectedId(0, juce::dontSendNotification);
     };
-    for (auto *button : {&saveButton, &loadButton, &undoButton, &redoButton})
+    for (auto *button : {&undoButton, &redoButton})
         addAndMakeVisible(button);
-    saveButton.onClick = [this] { choosePresetFile(true); };
-    loadButton.onClick = [this] { choosePresetFile(false); };
     undoButton.onClick = [this] {
         processor.undo();
         timerCallback();
@@ -98,7 +97,8 @@ void SpaceLabEditor::updateSpectrumVisibility() {
         stopTimer();
 }
 
-void SpaceLabEditor::configureSlider(juce::Slider &slider, int index, const juce::String &suffix) {
+void SpaceLabEditor::configureSlider(ParameterSlider &slider, int index,
+                                     const juce::String &suffix) {
     addAndMakeVisible(slider);
     slider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
     slider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 120, 26);
@@ -108,6 +108,7 @@ void SpaceLabEditor::configureSlider(juce::Slider &slider, int index, const juce
                                                "invertLeft", "invertRight", "modRate",  "modDepth",
                                                "split",      "mix"};
     auto *parameter = processor.getParameters().getParameter(ids[size_t(index)]);
+    slider.bindParameter(*parameter);
     const auto &range = parameter->getNormalisableRange();
     slider.setRange(range.start, range.end, range.interval);
     slider.onDragStart = [this, parameter] {
@@ -149,7 +150,7 @@ void SpaceLabEditor::timerCallback() {
 }
 
 void SpaceLabEditor::paint(juce::Graphics &graphics) {
-    graphics.fillAll(juce::Colour(0xff24282d));
+    appearance.paintBackground(graphics, getWidth());
     graphics.setColour(juce::Colours::white);
     graphics.setFont(22.0F);
     graphics.drawText("AHQ Space Lab", 20, 12, 400, 32, juce::Justification::left);
@@ -168,6 +169,8 @@ void SpaceLabEditor::paint(juce::Graphics &graphics) {
     }
 }
 void SpaceLabEditor::resized() {
+    presetBar.setBounds(0, getHeight() - ahq::ui::PresetBar::height, getWidth(),
+                        ahq::ui::PresetBar::height);
     undoButton.setBounds(440, 55, 90, 28);
     redoButton.setBounds(550, 55, 90, 28);
     for (int index = 0; index < 10; ++index) {
@@ -182,41 +185,4 @@ void SpaceLabEditor::resized() {
                                                                       35);
     }
     presets.setBounds(20, 475, 250, 28);
-    saveButton.setBounds(285, 475, 125, 28);
-    loadButton.setBounds(425, 475, 125, 28);
-    status.setBounds(20, 502, 620, 16);
-}
-void SpaceLabEditor::choosePresetFile(bool save) {
-    if (fileChooser != nullptr)
-        return;
-    fileChooser = std::make_unique<juce::FileChooser>(
-        save ? "Save Space Lab preset" : "Load Space Lab preset", juce::File{}, "*.ahqspacelab");
-    juce::Component::SafePointer<SpaceLabEditor> safeThis(this);
-    const int flags = juce::FileBrowserComponent::canSelectFiles |
-                      (save ? juce::FileBrowserComponent::saveMode |
-                                  juce::FileBrowserComponent::warnAboutOverwriting
-                            : juce::FileBrowserComponent::openMode);
-    fileChooser->launchAsync(flags, [safeThis, save](const juce::FileChooser &chooser) {
-        if (safeThis == nullptr)
-            return;
-        auto &editor = *safeThis.getComponent();
-        auto file = chooser.getResult();
-        if (file != juce::File{}) {
-            bool success = false;
-            if (save) {
-                juce::TemporaryFile temporary(file);
-                success = temporary.getFile().replaceWithText(editor.processor.createPresetXml()) &&
-                          temporary.overwriteTargetFileWithTemporary();
-            } else if (file.getSize() > 0 && file.getSize() <= 65536) {
-                success = editor.processor.loadPresetXml(file.loadFileAsString());
-            }
-            editor.status.setText(success ? "Preset saved/loaded" : "Preset operation failed",
-                                  juce::dontSendNotification);
-        }
-        // Keep the chooser alive until its own completion callback has returned.
-        juce::MessageManager::callAsync([safeThis] {
-            if (safeThis != nullptr)
-                safeThis->fileChooser.reset();
-        });
-    });
 }

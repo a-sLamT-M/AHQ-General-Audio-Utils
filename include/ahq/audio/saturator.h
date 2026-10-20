@@ -77,9 +77,10 @@ class Saturator {
     };
     static double shape(double input, SaturatorModel model) noexcept;
     double shapeAndTone(double input, ChannelState &channel, double drive, double bias,
-                        double tone) noexcept;
+                        double tone) const noexcept;
     double processWet(double input, ChannelState &channel, double drive, double bias,
-                      double tone) noexcept;
+                      double tone) const noexcept;
+    float delayDry(float input, ChannelState &channel) const noexcept;
     float delayDry(float input, ChannelState &channel) noexcept;
 
     SaturatorParameters parameters_;

@@ -1,4 +1,6 @@
+#include "choiceEditor_test.h"
 #include "transientProcessor.h"
+#include "userPreset_test.h"
 #include <cmath>
 #include <iostream>
 #include <juce_audio_utils/juce_audio_utils.h>
@@ -208,9 +210,12 @@ bool renderEditor(const juce::File &destination) {
 } // namespace
 int main(int argc, char **argv) {
     juce::ScopedJuceInitialiser_GUI initialise;
+    if (!testUserPresetLibrary<TransientProcessor>())
+        return 1;
     bool passed = testState();
     passed &= testHost();
     passed &= testShaping();
+    passed &= testChoiceEditor<TransientProcessor>({});
     if (argc == 2)
         passed &= renderEditor(juce::File(juce::String::fromUTF8(argv[1])));
     return passed ? 0 : 1;

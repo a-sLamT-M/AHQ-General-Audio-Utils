@@ -1,5 +1,6 @@
 #include "choiceEditor_test.h"
 #include "masterScopeProcessor.h"
+#include "userPreset_test.h"
 #include <cmath>
 #include <iostream>
 #include <juce_audio_utils/juce_audio_utils.h>
@@ -148,12 +149,64 @@ bool testStateLayoutsAndOverflow() {
                "boolean controls reject fractional values without changing state");
     passed &= expect(p.applyUserValues({0, 0, 1}, "Controls"), "edit controls");
     const auto xml = p.createPresetXml();
+    p.spectrumGainDb.store(12.F);
+    p.scopeGainDb.store(-6.F);
+    p.spectrumRange.store(120);
+    p.displayStyle.store(1);
+    p.displayTheme.store(2);
+    p.editorWidth.store(1300);
+    p.editorHeight.store(850);
+    const auto displayPreset = p.createPresetXml();
+    {
+        MasterScopeProcessor userPreset;
+        const auto previous = userPreset.createPresetXml();
+        passed &= expect(userPreset.loadPresetXml(displayPreset) &&
+                             userPreset.createPresetXml() == displayPreset,
+                         "user preset includes display gains, style, theme and dimensions");
+        passed &= expect(userPreset.undo() && userPreset.createPresetXml() == previous &&
+                             userPreset.redo() && userPreset.createPresetXml() == displayPreset,
+                         "display preset undo and redo restore the complete view");
+    }
     juce::MemoryBlock saved;
     p.getStateInformation(saved);
     passed &= expect(p.undo() && p.readValues() == initial && p.redo(), "undo redo controls");
     MasterScopeProcessor restored;
     restored.setStateInformation(saved.getData(), int(saved.getSize()));
     passed &= expect(restored.readValues() == p.readValues(), "all state values roundtrip");
+    passed &=
+        expect(restored.spectrumGainDb.load() == 12.F && restored.scopeGainDb.load() == -6.F &&
+                   restored.spectrumRange.load() == 120 && restored.displayStyle.load() == 1 &&
+                   restored.displayTheme.load() == 2 && restored.editorWidth.load() == 1300 &&
+                   restored.editorHeight.load() == 850,
+               "display controls and window dimensions roundtrip");
+    {
+        restored.spectrumGainDb.store(0);
+        restored.scopeGainDb.store(0);
+        std::unique_ptr<juce::AudioProcessorEditor> editor(restored.createEditorAndMakeActive());
+        editor->addToDesktop(juce::ComponentPeer::windowIsTemporary);
+        editor->setVisible(true);
+        restored.setStateInformation(saved.getData(), int(saved.getSize()));
+        juce::Timer::callAfterDelay(
+            80, [] { juce::MessageManager::getInstance()->stopDispatchLoop(); });
+        juce::MessageManager::getInstance()->runDispatchLoop();
+        bool spectrum = false, scope = false;
+        for (auto *child : editor->getChildren())
+            if (auto *slider = dynamic_cast<juce::Slider *>(child)) {
+                spectrum |= slider->getValue() == 12;
+                scope |= slider->getValue() == -6;
+            }
+        if (!spectrum || !scope || editor->getWidth() != 1300 ||
+            editor->getHeight() != 850 + ahq::ui::PresetBar::height)
+            std::cerr << "display restored: spectrum=" << spectrum << ", scope=" << scope
+                      << ", size=" << editor->getWidth() << "x" << editor->getHeight()
+                      << ", revision=" << restored.displayRevision.load() << '\n';
+        passed &= expect(spectrum && scope && editor->getWidth() == 1300 &&
+                             editor->getHeight() == 850 + ahq::ui::PresetBar::height,
+                         "open editor follows restored display settings");
+        editor->setVisible(false);
+        editor->removeFromDesktop();
+        restored.editorBeingDeleted(editor.get());
+    }
     passed &= expect(!restored.loadPresetXml(xml.replace("version=\"1\"", "version=\"999\"")) &&
                          restored.readValues() == p.readValues(),
                      "invalid version leaves controls unchanged");
@@ -206,6 +259,8 @@ bool renderEditor(const juce::File &destination) {
 } // namespace
 int main(int argc, char **argv) {
     juce::ScopedJuceInitialiser_GUI init;
+    if (!testUserPresetLibrary<MasterScopeProcessor>())
+        return 1;
     bool passed = testMetering();
     passed &= testChoiceEditor<MasterScopeProcessor>({{"L/R phase", "scope"}});
     passed &= testStateLayoutsAndOverflow();

@@ -5,14 +5,24 @@ add_library(ahq_audio_core STATIC
     src/common/gainProcessor.cpp
     src/common/linearSmoother.cpp
     src/filters/quickFilter.cpp
+    src/filters/parametricEq.cpp
     src/dynamics/transientShaper.cpp
+    src/dynamics/volumeEnvelope.cpp
+    src/dynamics/noiseGate.cpp
+    src/dynamics/tremolo.cpp
+    src/dynamics/classicCompressor.cpp
+    src/reverb/reverb.cpp
     src/distortion/saturator.cpp
     src/spatial/orbit.cpp
+    src/spatial/elevation.cpp
+    src/synthesis/synthesizer.cpp
+    src/synthesis/synthPresets.cpp
     src/metering/loudnessMeter.cpp
     src/metering/truePeakMeter.cpp
     src/delay/grainDelay.cpp
     src/spatial/spaceLab.cpp
     src/creative/chaos.cpp
+    src/creative/retroTools.cpp
     src/metering/stereoMeter.cpp
     src/metering/loudnessRange.cpp
     src/dynamics/trueLimiter.cpp)
@@ -27,13 +37,22 @@ if(BUILD_TESTING)
         tests/core/common/parameterRange_test.cpp
         tests/core/common/gainProcessor_test.cpp
         tests/core/filters/quickFilter_test.cpp
+        tests/core/filters/parametricEq_test.cpp
         tests/core/dynamics/transientShaper_test.cpp
+        tests/core/dynamics/volumeEnvelope_test.cpp
+        tests/core/dynamics/noiseGate_test.cpp
+        tests/core/dynamics/tremolo_test.cpp
+        tests/core/dynamics/classicCompressor_test.cpp
+        tests/core/reverb/reverb_test.cpp
         tests/core/dynamics/trueLimiter_test.cpp
         tests/core/distortion/saturator_test.cpp
         tests/core/spatial/orbit_test.cpp
+        tests/core/spatial/elevation_test.cpp
+        tests/core/synthesis/synthesizer_test.cpp
         tests/core/spatial/spaceLab_test.cpp
         tests/core/delay/grainDelay_test.cpp
         tests/core/creative/chaos_test.cpp
+        tests/core/creative/retroTools_test.cpp
         tests/core/metering/loudnessMeter_test.cpp
         tests/core/metering/loudnessRange_test.cpp
         tests/core/metering/truePeakMeter_test.cpp
@@ -87,5 +106,18 @@ if(AHQ_BUILD_PLUGINS)
         ahq_add_plugin_test(masterScopePlugin_test ahq_master_scope plugins/master-scope)
         ahq_add_plugin_test(chaosPlugin_test ahq_chaos plugins/chaos)
         ahq_add_plugin_test(trueLimiterPlugin_test ahq_true_limiter plugins/true-limiter)
+        ahq_add_plugin_test(volumeEnvelopePlugin_test ahq_volume_envelope plugins/volume-envelope)
+        ahq_add_plugin_test(curveEqPlugin_test ahq_curve_eq plugins/curve-eq)
+        ahq_add_plugin_test(pcmStationPlugin_test ahq_pcm_station plugins/pcm-station)
+        ahq_add_plugin_test(modularPlugin_test ahq_modular plugins/modular)
+        ahq_add_plugin_test(elevationPlugin_test ahq_elevation plugins/elevation)
+        ahq_add_plugin_test(retroToolsPlugin_test ahq_retro_tools plugins/retro-tools)
+        ahq_add_plugin_test(gatedReverbPlugin_test ahq_gated_reverb plugins/gated-reverb)
+        ahq_add_plugin_test(hybridReverbPlugin_test ahq_hybrid_reverb plugins/hybrid-reverb)
+        ahq_add_plugin_test(cabinetPlugin_test ahq_cabinet plugins/cabinet)
+        ahq_add_plugin_test(fetCompressorPlugin_test ahq_fet_compressor plugins/fet-compressor)
+        ahq_add_plugin_test(optoLevelerPlugin_test ahq_opto_leveler plugins/opto-leveler)
+        ahq_add_plugin_test(tremoloPlugin_test ahq_tremolo plugins/tremolo)
+        ahq_add_plugin_test(noiseGatePlugin_test ahq_noise_gate plugins/noise-gate)
     endif()
 endif()

@@ -72,7 +72,7 @@ juce::String PluginState::createPresetXml() const {
     return xml.toString();
 }
 
-bool PluginState::decodeXml(const juce::XmlElement &xml, Values &values) {
+bool PluginState::decodeXml(const juce::XmlElement &xml, Values &values) const {
     if (!xml.hasTagName(xmlTag) || xml.getStringAttribute("version") != "1" ||
         xml.getNumAttributes() != int(ids.size() + 1) || xml.getFirstChildElement() != nullptr)
         return false;
@@ -83,6 +83,36 @@ bool PluginState::decodeXml(const juce::XmlElement &xml, Values &values) {
             return false;
     }
     return validateValues(values);
+}
+
+bool PluginState::decodePresetXml(const juce::String &text, Values &values) const {
+    if (text.getNumBytesAsUTF8() > 65536)
+        return false;
+    const auto xml = juce::parseXML(text);
+    values.resize(ids.size());
+    return xml && decodeXml(*xml, values);
+}
+
+bool PluginState::applyUserPreset(juce::String before, juce::String after,
+                                  std::function<bool(const juce::String &)> restore) {
+    class SnapshotEdit final : public juce::UndoableAction {
+      public:
+        SnapshotEdit(juce::String from, juce::String to,
+                     std::function<bool(const juce::String &)> callback)
+            : previous(std::move(from)), next(std::move(to)), apply(std::move(callback)) {}
+        bool perform() override { return apply(next); }
+        bool undo() override { return apply(previous); }
+        int getSizeInUnits() override {
+            return int(std::min<size_t>(size_t(std::numeric_limits<int>::max()),
+                                        previous.getNumBytesAsUTF8() + next.getNumBytesAsUTF8()));
+        }
+
+      private:
+        juce::String previous, next;
+        std::function<bool(const juce::String &)> apply;
+    };
+    return performUserAction(
+        new SnapshotEdit(std::move(before), std::move(after), std::move(restore)), "Load preset");
 }
 
 void PluginState::writeValues(std::span<const float> values, bool notifyHost) {
@@ -122,7 +152,24 @@ bool PluginState::applyUserValues(std::span<const float> values, const juce::Str
         new ParameterEdit(*this, before, Values(values.begin(), values.end())));
 }
 
+bool PluginState::performUserAction(juce::UndoableAction *action, const juce::String &name) {
+    jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
+    if (historyRevision != stateRevision.load()) {
+        undoManager.clearUndoHistory();
+        historyRevision = stateRevision.load();
+    }
+    // IR preset actions report their byte size; keep one complete snapshot even if large,
+    // rather than inheriting UndoManager's minimum of thirty retained transactions.
+    undoManager.setMaxNumberOfStoredUnits(32 * 1024 * 1024, 1);
+    undoManager.beginNewTransaction(name);
+    return undoManager.perform(action);
+}
+
 void PluginState::recordUserEdit(std::span<const float> previous, int parameterIndex,
+                                 const juce::String &name) {
+    recordUserEdit(previous, std::span<const int>(&parameterIndex, 1), name);
+}
+void PluginState::recordUserEdit(std::span<const float> previous, std::span<const int> indices,
                                  const juce::String &name) {
     jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
     if (historyRevision != stateRevision.load()) {
@@ -133,10 +180,12 @@ void PluginState::recordUserEdit(std::span<const float> previous, int parameterI
     if (previous.size() != ids.size())
         return;
     const auto after = readValues();
-    if (!juce::isPositiveAndBelow(parameterIndex, int(after.size())))
-        return;
     auto before = after;
-    before[size_t(parameterIndex)] = previous[size_t(parameterIndex)];
+    for (int index : indices) {
+        if (!juce::isPositiveAndBelow(index, int(after.size())))
+            return;
+        before[size_t(index)] = previous[size_t(index)];
+    }
     if (before != after && validateValues(before)) {
         undoManager.beginNewTransaction(name);
         undoManager.perform(new ParameterEdit(*this, before, after, true));

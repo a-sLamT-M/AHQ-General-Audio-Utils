@@ -1,5 +1,7 @@
 #pragma once
 #include "../common/analysisDisplay.h"
+#include "../common/parameterControl.h"
+#include "../common/ui/presetBar.h"
 #include "chaosProcessor.h"
 #include <juce_audio_utils/juce_audio_utils.h>
 
@@ -10,6 +12,7 @@ class ChaosEditor final : public juce::AudioProcessorEditor,
   public:
     explicit ChaosEditor(ChaosProcessor &);
     ~ChaosEditor() override;
+    int getControlParameterIndex(juce::Component &c) override { return controlParameterIndex(c); }
     void paint(juce::Graphics &) override;
     void resized() override;
     void visibilityChanged() override;
@@ -21,17 +24,16 @@ class ChaosEditor final : public juce::AudioProcessorEditor,
     void componentPeerChanged() override { updateSpectrumVisibility(); }
     void componentVisibilityChanged() override { updateSpectrumVisibility(); }
     void updateSpectrumVisibility();
-    void choosePresetFile(bool save);
-    void configureSlider(juce::Slider &, int index, const juce::String &suffix);
+    void configureSlider(ParameterSlider &, int index, const juce::String &suffix);
     ChaosProcessor &processor;
-    std::array<juce::Slider, 10> sliders;
+    ahq::ui::PluginTheme appearance{*this, processor.getName()};
+    ahq::ui::PresetBar presetBar{processor, appearance};
+    std::array<ParameterSlider, 10> sliders;
     juce::ComboBox presets;
-    juce::TextButton saveButton{"Save preset"}, loadButton{"Load preset"};
     juce::TextButton undoButton{"Undo"}, redoButton{"Redo"};
     std::array<juce::Label, 10> labels;
     juce::Label status;
     juce::TooltipWindow tooltipWindow{this, 700};
-    std::unique_ptr<juce::FileChooser> fileChooser;
     ChaosProcessor::Values dragBefore{};
     bool dragging = false;
     AnalysisDisplay display;

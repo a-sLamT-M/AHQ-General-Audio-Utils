@@ -4,7 +4,8 @@
 TransientEditor::TransientEditor(TransientProcessor &owner)
     : AudioProcessorEditor(owner), ComponentMovementWatcher(this), processor(owner),
       display(owner.getAnalysis()) {
-    setSize(660, 610);
+    addAndMakeVisible(presetBar);
+    setSize(660, 676);
     const std::array<const char *, 5> names{"Attack", "Sustain", "Sensitivity", "Time",
                                             "Wet mix (0-1)"};
     constexpr std::array<const char *, 5> suffixes{" dB", " dB", " dBFS", " ms", ""};
@@ -26,10 +27,8 @@ TransientEditor::TransientEditor(TransientProcessor &owner)
         processor.loadFactoryPreset(presets.getSelectedId() - 1);
         presets.setSelectedId(0, juce::dontSendNotification);
     };
-    for (auto *button : {&saveButton, &loadButton, &undoButton, &redoButton})
+    for (auto *button : {&undoButton, &redoButton})
         addAndMakeVisible(button);
-    saveButton.onClick = [this] { choosePresetFile(true); };
-    loadButton.onClick = [this] { choosePresetFile(false); };
     undoButton.onClick = [this] {
         processor.undo();
         timerCallback();
@@ -59,7 +58,8 @@ void TransientEditor::updateSpectrumVisibility() {
         stopTimer();
 }
 
-void TransientEditor::configureSlider(juce::Slider &slider, int index, const juce::String &suffix) {
+void TransientEditor::configureSlider(ParameterSlider &slider, int index,
+                                      const juce::String &suffix) {
     addAndMakeVisible(slider);
     slider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
     slider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 120, 26);
@@ -67,6 +67,7 @@ void TransientEditor::configureSlider(juce::Slider &slider, int index, const juc
     slider.setNumDecimalPlacesToDisplay(index == 1 ? 1 : 3);
     constexpr std::array<const char *, 5> ids{"attack", "sustain", "sensitivity", "time", "mix"};
     auto *parameter = processor.getParameters().getParameter(ids[size_t(index)]);
+    slider.bindParameter(*parameter);
     const auto &range = parameter->getNormalisableRange();
     slider.setRange(range.start, range.end, range.interval);
     slider.onDragStart = [this, parameter] {
@@ -101,7 +102,7 @@ void TransientEditor::timerCallback() {
 }
 
 void TransientEditor::paint(juce::Graphics &graphics) {
-    graphics.fillAll(juce::Colour(0xff24282d));
+    appearance.paintBackground(graphics, getWidth());
     graphics.setColour(juce::Colours::white);
     graphics.setFont(22.0F);
     graphics.drawText("AHQ Transient", 20, 12, 400, 32, juce::Justification::left);
@@ -110,6 +111,8 @@ void TransientEditor::paint(juce::Graphics &graphics) {
     display.paintSpectrum(graphics);
 }
 void TransientEditor::resized() {
+    presetBar.setBounds(0, getHeight() - ahq::ui::PresetBar::height, getWidth(),
+                        ahq::ui::PresetBar::height);
     undoButton.setBounds(440, 55, 90, 28);
     redoButton.setBounds(550, 55, 90, 28);
     for (int index = 0; index < 5; ++index) {
@@ -117,41 +120,4 @@ void TransientEditor::resized() {
         sliders[size_t(index)].setBounds(15 + index * 128, 120, 124, 145);
     }
     presets.setBounds(20, 335, 250, 28);
-    saveButton.setBounds(285, 335, 125, 28);
-    loadButton.setBounds(425, 335, 125, 28);
-    status.setBounds(20, 362, 620, 16);
-}
-void TransientEditor::choosePresetFile(bool save) {
-    if (fileChooser != nullptr)
-        return;
-    fileChooser = std::make_unique<juce::FileChooser>(
-        save ? "Save transient preset" : "Load transient preset", juce::File{}, "*.ahqtransient");
-    juce::Component::SafePointer<TransientEditor> safeThis(this);
-    const int flags = juce::FileBrowserComponent::canSelectFiles |
-                      (save ? juce::FileBrowserComponent::saveMode |
-                                  juce::FileBrowserComponent::warnAboutOverwriting
-                            : juce::FileBrowserComponent::openMode);
-    fileChooser->launchAsync(flags, [safeThis, save](const juce::FileChooser &chooser) {
-        if (safeThis == nullptr)
-            return;
-        auto &editor = *safeThis.getComponent();
-        auto file = chooser.getResult();
-        if (file != juce::File{}) {
-            bool success = false;
-            if (save) {
-                juce::TemporaryFile temporary(file);
-                success = temporary.getFile().replaceWithText(editor.processor.createPresetXml()) &&
-                          temporary.overwriteTargetFileWithTemporary();
-            } else if (file.getSize() > 0 && file.getSize() <= 65536) {
-                success = editor.processor.loadPresetXml(file.loadFileAsString());
-            }
-            editor.status.setText(success ? "Preset saved/loaded" : "Preset operation failed",
-                                  juce::dontSendNotification);
-        }
-        // Keep the chooser alive until its own completion callback has returned.
-        juce::MessageManager::callAsync([safeThis] {
-            if (safeThis != nullptr)
-                safeThis->fileChooser.reset();
-        });
-    });
 }

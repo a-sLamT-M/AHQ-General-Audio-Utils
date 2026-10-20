@@ -1,5 +1,6 @@
 #include "choiceEditor_test.h"
 #include "quickFilterProcessor.h"
+#include "userPreset_test.h"
 
 #include <cmath>
 #include <iostream>
@@ -275,6 +276,8 @@ bool renderEditor(const juce::File &destination) {
 
 int main(int argc, char **argv) {
     juce::ScopedJuceInitialiser_GUI initialise;
+    if (!testUserPresetLibrary<QuickFilterProcessor>())
+        return 1;
     bool passed = testStateAndUndo();
     passed &=
         testChoiceEditor<QuickFilterProcessor>({{"Low pass", "mode"}, {"12 dB/oct", "slope"}});

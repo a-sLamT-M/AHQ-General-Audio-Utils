@@ -1,5 +1,6 @@
 #include "choiceEditor_test.h"
 #include "orbitProcessor.h"
+#include "userPreset_test.h"
 #include <cmath>
 #include <iostream>
 #include <juce_audio_utils/juce_audio_utils.h>
@@ -285,6 +286,8 @@ bool renderEditor(const juce::File &destination) {
 } // namespace
 int main(int argc, char **argv) {
     juce::ScopedJuceInitialiser_GUI initialise;
+    if (!testUserPresetLibrary<OrbitProcessor>())
+        return 1;
     bool passed = testState();
     passed &= testChoiceEditor<OrbitProcessor>({{"Hz speed", "sync"}, {"Clockwise", "direction"}});
     passed &= testLayoutAndDry();

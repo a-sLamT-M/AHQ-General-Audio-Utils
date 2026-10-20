@@ -9,6 +9,9 @@ class AnalysisDisplay {
     void refresh(bool spectrumVisible);
     void paintMeters(juce::Graphics &);
     void paintSpectrum(juce::Graphics &);
+    // Display gain only: never changes the audio or published measurements.
+    void paintSpectrum(juce::Graphics &, juce::Rectangle<float>, float gainDb, float rangeDb,
+                       int style, juce::Colour colour);
 
   private:
     void updateSpectrum();
@@ -20,7 +23,6 @@ class AnalysisDisplay {
                                                false};
     std::array<float, fftSize * 2> fftLeft{}, fftRight{};
     std::array<float, fftSize / 2> spectrumDb{};
-    juce::Path spectrumPath;
     float windowSum = 1;
     double displayedSampleRate = 48000;
 };

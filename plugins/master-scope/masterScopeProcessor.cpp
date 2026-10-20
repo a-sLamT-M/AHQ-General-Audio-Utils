@@ -24,6 +24,70 @@ MasterScopeProcessor::MasterScopeProcessor(bool enableWorker)
       parameters(*this, nullptr, "MasterScopeParameters", createParameterLayout()),
       state(parameters, ids, "AHQMasterScopeState", program), workerEnabled(enableWorker) {}
 MasterScopeProcessor::~MasterScopeProcessor() { stopWorker(); }
+juce::String MasterScopeProcessor::createPresetXml() const {
+    auto xml = juce::parseXML(state.createPresetXml());
+    auto *view = xml->createNewChildElement("Display");
+    view->setAttribute("spectrumGain", double(spectrumGainDb.load()));
+    view->setAttribute("scopeGain", double(scopeGainDb.load()));
+    view->setAttribute("range", spectrumRange.load());
+    view->setAttribute("style", displayStyle.load());
+    view->setAttribute("theme", displayTheme.load());
+    view->setAttribute("width", editorWidth.load());
+    view->setAttribute("height", editorHeight.load());
+    return xml->toString();
+}
+void MasterScopeProcessor::getStateInformation(juce::MemoryBlock &block) {
+    if (auto xml = juce::parseXML(createPresetXml()))
+        copyXmlToBinary(*xml, block);
+}
+bool MasterScopeProcessor::loadPresetXml(const juce::String &xml, bool undoable) {
+    if (undoable)
+        return state.applyUserPreset(createPresetXml(), xml, [this](const juce::String &text) {
+            return restorePresetXml(text, true);
+        });
+    if (!restorePresetXml(xml, false))
+        return false;
+    state.invalidateHistory();
+    return true;
+}
+void MasterScopeProcessor::setStateInformation(const void *data, int size) {
+    if (data == nullptr || size <= 0 || size > 65536)
+        return;
+    if (auto xml = getXmlFromBinary(data, size))
+        loadPresetXml(xml->toString(), false);
+}
+bool MasterScopeProcessor::restorePresetXml(const juce::String &text, bool notifyHost) {
+    if (text.getNumBytesAsUTF8() > 65536)
+        return false;
+    auto xml = juce::parseXML(text);
+    if (!xml || xml->getNumChildElements() > 1)
+        return false;
+    std::unique_ptr<juce::XmlElement> view;
+    if (auto *child = xml->getChildByName("Display")) {
+        view = std::make_unique<juce::XmlElement>(*child);
+        xml->removeChildElement(child, true);
+    }
+    PluginState::Values values;
+    if (!state.decodePresetXml(xml->toString(), values))
+        return false;
+    state.writeValues(values, notifyHost);
+    auto readGain = [&](const char *name) {
+        const auto value = view->getDoubleAttribute(name, 0);
+        return std::isfinite(value) ? float(std::clamp(value, -24.0, 36.0)) : 0.F;
+    };
+    if (view) {
+        spectrumGainDb.store(readGain("spectrumGain"));
+        scopeGainDb.store(readGain("scopeGain"));
+        const int range = view->getIntAttribute("range", 90);
+        spectrumRange.store(range == 60 || range == 120 ? range : 90);
+        displayStyle.store(std::clamp(view->getIntAttribute("style", 1), 0, 2));
+        displayTheme.store(std::clamp(view->getIntAttribute("theme", 0), 0, 2));
+        editorWidth.store(std::clamp(view->getIntAttribute("width", 1180), 980, 2000));
+        editorHeight.store(std::clamp(view->getIntAttribute("height", 780), 680, 1400));
+        displayRevision.fetch_add(1);
+    }
+    return true;
+}
 void MasterScopeProcessor::stopWorker() {
     stopping.store(true, std::memory_order_release);
     if (worker.joinable())
@@ -46,7 +110,7 @@ void MasterScopeProcessor::prepareToPlay(double rate, int) {
     gapGeneration.store(0);
     flags.store(0);
     pending.store(false);
-    peakFrames = phaseDivider = 0;
+    peakFrames = 0;
     peakInterval = prepared ? unsigned(std::max(1.0, std::round(rate * .1))) : 1U;
     previousRun = readValues()[0] != 0;
     previousHold = readValues()[1] != 0;
@@ -144,15 +208,19 @@ void MasterScopeProcessor::processBlock(juce::AudioBuffer<float> &b, juce::MidiB
             if (!hold)
                 peak.clearPeaks(); // FIR history deliberately survives interval changes.
         }
-        if (displayEnabled.load(std::memory_order_relaxed) && ++phaseDivider >= 32) {
-            phaseDivider = 0;
-            int a, n, c, m;
-            phaseFifo.prepareToWrite(1, a, n, c, m);
-            if (n + m && std::isfinite(l) && std::isfinite(r)) {
-                phaseSamples[size_t(n ? a : c)] = {l, r, audioGeneration};
-                phaseFifo.finishedWrite(1);
-            }
+    }
+    if (displayEnabled.load(std::memory_order_relaxed)) {
+        int first, firstCount, second, secondCount;
+        phaseFifo.prepareToWrite(b.getNumSamples(), first, firstCount, second, secondCount);
+        for (int i = 0; i < firstCount; ++i)
+            phaseSamples[size_t(first + i)] = {left[i], right ? right[i] : left[i],
+                                               audioGeneration};
+        for (int i = 0; i < secondCount; ++i) {
+            const int frame = firstCount + i;
+            phaseSamples[size_t(second + i)] = {left[frame], right ? right[frame] : left[frame],
+                                                audioGeneration};
         }
+        phaseFifo.finishedWrite(firstCount + secondCount);
     }
     publishMetering();
     analysis.publish(b, PluginAnalysis::peak(b));

@@ -4,7 +4,8 @@
 GhostDelayEditor::GhostDelayEditor(GhostDelayProcessor &owner)
     : AudioProcessorEditor(owner), ComponentMovementWatcher(this), processor(owner),
       display(owner.getAnalysis()) {
-    setSize(660, 750);
+    addAndMakeVisible(presetBar);
+    setSize(660, 816);
     constexpr std::array<const char *, 9> names{"Grain",      "Delay",          "Pitch",
                                                 "Scatter",    "Density",        "Feedback",
                                                 "Randomness", "Seed (integer)", "Wet mix"};
@@ -31,10 +32,8 @@ GhostDelayEditor::GhostDelayEditor(GhostDelayProcessor &owner)
         processor.loadFactoryPreset(presets.getSelectedId() - 1);
         presets.setSelectedId(0, juce::dontSendNotification);
     };
-    for (auto *button : {&saveButton, &loadButton, &undoButton, &redoButton})
+    for (auto *button : {&undoButton, &redoButton})
         addAndMakeVisible(button);
-    saveButton.onClick = [this] { choosePresetFile(true); };
-    loadButton.onClick = [this] { choosePresetFile(false); };
     undoButton.onClick = [this] {
         processor.undo();
         timerCallback();
@@ -64,7 +63,7 @@ void GhostDelayEditor::updateSpectrumVisibility() {
         stopTimer();
 }
 
-void GhostDelayEditor::configureSlider(juce::Slider &slider, int index,
+void GhostDelayEditor::configureSlider(ParameterSlider &slider, int index,
                                        const juce::String &suffix) {
     addAndMakeVisible(slider);
     slider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
@@ -74,6 +73,7 @@ void GhostDelayEditor::configureSlider(juce::Slider &slider, int index,
     constexpr std::array<const char *, 9> ids{
         "grain", "delay", "pitch", "scatter", "density", "feedback", "randomness", "seed", "mix"};
     auto *parameter = processor.getParameters().getParameter(ids[size_t(index)]);
+    slider.bindParameter(*parameter);
     const auto &range = parameter->getNormalisableRange();
     slider.setRange(range.start, range.end, range.interval);
     slider.onDragStart = [this, parameter] {
@@ -108,7 +108,7 @@ void GhostDelayEditor::timerCallback() {
 }
 
 void GhostDelayEditor::paint(juce::Graphics &graphics) {
-    graphics.fillAll(juce::Colour(0xff24282d));
+    appearance.paintBackground(graphics, getWidth());
     graphics.setColour(juce::Colours::white);
     graphics.setFont(22.0F);
     graphics.drawText("AHQ Ghost Delay", 20, 12, 400, 32, juce::Justification::left);
@@ -125,6 +125,8 @@ void GhostDelayEditor::paint(juce::Graphics &graphics) {
     }
 }
 void GhostDelayEditor::resized() {
+    presetBar.setBounds(0, getHeight() - ahq::ui::PresetBar::height, getWidth(),
+                        ahq::ui::PresetBar::height);
     undoButton.setBounds(440, 55, 90, 28);
     redoButton.setBounds(550, 55, 90, 28);
     for (int index = 0; index < 9; ++index) {
@@ -136,41 +138,4 @@ void GhostDelayEditor::resized() {
         sliders[size_t(index)].setBounds(x, y + 24, width, 113);
     }
     presets.setBounds(20, 475, 250, 28);
-    saveButton.setBounds(285, 475, 125, 28);
-    loadButton.setBounds(425, 475, 125, 28);
-    status.setBounds(20, 502, 620, 16);
-}
-void GhostDelayEditor::choosePresetFile(bool save) {
-    if (fileChooser != nullptr)
-        return;
-    fileChooser = std::make_unique<juce::FileChooser>(
-        save ? "Save ghost preset" : "Load ghost preset", juce::File{}, "*.ahqghost");
-    juce::Component::SafePointer<GhostDelayEditor> safeThis(this);
-    const int flags = juce::FileBrowserComponent::canSelectFiles |
-                      (save ? juce::FileBrowserComponent::saveMode |
-                                  juce::FileBrowserComponent::warnAboutOverwriting
-                            : juce::FileBrowserComponent::openMode);
-    fileChooser->launchAsync(flags, [safeThis, save](const juce::FileChooser &chooser) {
-        if (safeThis == nullptr)
-            return;
-        auto &editor = *safeThis.getComponent();
-        auto file = chooser.getResult();
-        if (file != juce::File{}) {
-            bool success = false;
-            if (save) {
-                juce::TemporaryFile temporary(file);
-                success = temporary.getFile().replaceWithText(editor.processor.createPresetXml()) &&
-                          temporary.overwriteTargetFileWithTemporary();
-            } else if (file.getSize() > 0 && file.getSize() <= 65536) {
-                success = editor.processor.loadPresetXml(file.loadFileAsString());
-            }
-            editor.status.setText(success ? "Preset saved/loaded" : "Preset operation failed",
-                                  juce::dontSendNotification);
-        }
-        // Keep the chooser alive until its own completion callback has returned.
-        juce::MessageManager::callAsync([safeThis] {
-            if (safeThis != nullptr)
-                safeThis->fileChooser.reset();
-        });
-    });
 }

@@ -1,4 +1,6 @@
+#include "choiceEditor_test.h"
 #include "ghostDelayProcessor.h"
+#include "userPreset_test.h"
 #include <cmath>
 #include <iostream>
 #include <juce_audio_utils/juce_audio_utils.h>
@@ -247,10 +249,13 @@ bool renderEditor(const juce::File &destination) {
 } // namespace
 int main(int argc, char **argv) {
     juce::ScopedJuceInitialiser_GUI initialise;
+    if (!testUserPresetLibrary<GhostDelayProcessor>())
+        return 1;
     bool passed = testState();
     passed &= testDryLayoutsAndTail();
     passed &= testCoreAndBypass();
     passed &= testSeedReproducibility();
+    passed &= testChoiceEditor<GhostDelayProcessor>({});
     if (argc == 2)
         passed &= renderEditor(juce::File(juce::String::fromUTF8(argv[1])));
     return passed ? 0 : 1;

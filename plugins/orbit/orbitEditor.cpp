@@ -4,7 +4,8 @@
 OrbitEditor::OrbitEditor(OrbitProcessor &owner)
     : AudioProcessorEditor(owner), ComponentMovementWatcher(this), processor(owner),
       display(owner.getAnalysis()) {
-    setSize(660, 610);
+    addAndMakeVisible(presetBar);
+    setSize(660, 676);
     constexpr std::array<const char *, 6> names{"Rate",  "Manual BPM", "Beats / turn",
                                                 "Depth", "Phase",      "Wet mix"};
     constexpr std::array<const char *, 6> suffixes{" Hz", "", "", "", " deg", ""};
@@ -42,10 +43,8 @@ OrbitEditor::OrbitEditor(OrbitProcessor &owner)
         processor.loadFactoryPreset(presets.getSelectedId() - 1);
         presets.setSelectedId(0, juce::dontSendNotification);
     };
-    for (auto *button : {&saveButton, &loadButton, &undoButton, &redoButton})
+    for (auto *button : {&undoButton, &redoButton})
         addAndMakeVisible(button);
-    saveButton.onClick = [this] { choosePresetFile(true); };
-    loadButton.onClick = [this] { choosePresetFile(false); };
     undoButton.onClick = [this] {
         processor.undo();
         timerCallback();
@@ -86,7 +85,7 @@ void OrbitEditor::updateSpectrumVisibility() {
         stopTimer();
 }
 
-void OrbitEditor::configureSlider(juce::Slider &slider, int index, const juce::String &suffix) {
+void OrbitEditor::configureSlider(ParameterSlider &slider, int index, const juce::String &suffix) {
     addAndMakeVisible(slider);
     slider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
     slider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 102, 26);
@@ -95,6 +94,7 @@ void OrbitEditor::configureSlider(juce::Slider &slider, int index, const juce::S
     constexpr std::array<const char *, 8> ids{"rate",      "sync",  "bpm",   "beats",
                                               "direction", "depth", "phase", "mix"};
     auto *parameter = processor.getParameters().getParameter(ids[size_t(index)]);
+    slider.bindParameter(*parameter);
     const auto &range = parameter->getNormalisableRange();
     slider.setRange(range.start, range.end, range.interval);
     slider.onDragStart = [this, parameter] {
@@ -145,7 +145,7 @@ void OrbitEditor::timerCallback() {
 }
 
 void OrbitEditor::paint(juce::Graphics &graphics) {
-    graphics.fillAll(juce::Colour(0xff24282d));
+    appearance.paintBackground(graphics, getWidth());
     graphics.setColour(juce::Colours::white);
     graphics.setFont(22.0F);
     graphics.drawText("AHQ Orbit", 20, 12, 210, 32, juce::Justification::left);
@@ -157,6 +157,8 @@ void OrbitEditor::paint(juce::Graphics &graphics) {
     display.paintSpectrum(graphics);
 }
 void OrbitEditor::resized() {
+    presetBar.setBounds(0, getHeight() - ahq::ui::PresetBar::height, getWidth(),
+                        ahq::ui::PresetBar::height);
     undoButton.setBounds(440, 55, 90, 28);
     redoButton.setBounds(550, 55, 90, 28);
     speedMode.setBounds(20, 55, 160, 28);
@@ -167,41 +169,4 @@ void OrbitEditor::resized() {
         sliders[size_t(index)].setBounds(10 + index * 107, 120, 105, 128);
     }
     presets.setBounds(20, 335, 250, 28);
-    saveButton.setBounds(285, 335, 125, 28);
-    loadButton.setBounds(425, 335, 125, 28);
-    status.setBounds(20, 362, 620, 16);
-}
-void OrbitEditor::choosePresetFile(bool save) {
-    if (fileChooser != nullptr)
-        return;
-    fileChooser = std::make_unique<juce::FileChooser>(
-        save ? "Save orbit preset" : "Load orbit preset", juce::File{}, "*.ahqorbit");
-    juce::Component::SafePointer<OrbitEditor> safeThis(this);
-    const int flags = juce::FileBrowserComponent::canSelectFiles |
-                      (save ? juce::FileBrowserComponent::saveMode |
-                                  juce::FileBrowserComponent::warnAboutOverwriting
-                            : juce::FileBrowserComponent::openMode);
-    fileChooser->launchAsync(flags, [safeThis, save](const juce::FileChooser &chooser) {
-        if (safeThis == nullptr)
-            return;
-        auto &editor = *safeThis.getComponent();
-        auto file = chooser.getResult();
-        if (file != juce::File{}) {
-            bool success = false;
-            if (save) {
-                juce::TemporaryFile temporary(file);
-                success = temporary.getFile().replaceWithText(editor.processor.createPresetXml()) &&
-                          temporary.overwriteTargetFileWithTemporary();
-            } else if (file.getSize() > 0 && file.getSize() <= 65536) {
-                success = editor.processor.loadPresetXml(file.loadFileAsString());
-            }
-            editor.status.setText(success ? "Preset saved/loaded" : "Preset operation failed",
-                                  juce::dontSendNotification);
-        }
-        // Keep the chooser alive until its own completion callback has returned.
-        juce::MessageManager::callAsync([safeThis] {
-            if (safeThis != nullptr)
-                safeThis->fileChooser.reset();
-        });
-    });
 }

@@ -7,7 +7,7 @@ AnalysisDisplay::AnalysisDisplay(PluginAnalysis &a) : analysis(a) {
     windowSum = 0;
     for (float sample : unityWindow)
         windowSum += sample;
-    spectrumDb.fill(-90);
+    spectrumDb.fill(-120);
 }
 void AnalysisDisplay::refresh(bool spectrumVisible) {
     const auto levels = analysis.readLevels();
@@ -39,8 +39,7 @@ void AnalysisDisplay::updateSpectrum() {
     if (sampleRate != displayedSampleRate) {
         displayedSampleRate = sampleRate;
         analysis.setSpectrumEnabled(true);
-        spectrumDb.fill(-90);
-        spectrumPath.clear();
+        spectrumDb.fill(-120);
         return;
     }
     bool received = false;
@@ -60,58 +59,103 @@ void AnalysisDisplay::updateSpectrum() {
             const float left = fftLeft[size_t(bin)] * 2 / windowSum;
             const float right = fftRight[size_t(bin)] * 2 / windowSum;
             const float power = (left * left + right * right) * 0.5F;
-            const float decibels = 10 * std::log10(std::max(power, 1.0e-9F));
+            const float decibels = 10 * std::log10(std::max(power, 1.0e-12F));
             spectrumDb[size_t(bin)] = std::max(decibels, spectrumDb[size_t(bin)] - 2);
         }
     } else {
         for (auto &value : spectrumDb)
-            value = std::max(-90.0F, value - 2);
-    }
-    spectrumPath.clear();
-    const double maximumHz = std::min(20000.0, sampleRate * 0.5);
-    if (maximumHz <= 20)
-        return;
-    bool first = true;
-    for (int bin = 1; bin < fftSize / 2; ++bin) {
-        const double frequencyHz = bin * sampleRate / fftSize;
-        if (frequencyHz < 20 || frequencyHz > maximumHz)
-            continue;
-        const float x = 65 + 550 * float(std::log(frequencyHz / 20) / std::log(maximumHz / 20));
-        const float y = 555 - 150 * juce::jlimit(0.0F, 1.0F, (spectrumDb[size_t(bin)] + 90) / 90);
-        if (first) {
-            spectrumPath.startNewSubPath(x, y);
-            first = false;
-        } else
-            spectrumPath.lineTo(x, y);
+            value = std::max(-120.0F, value - 2);
     }
 }
 
 void AnalysisDisplay::paintSpectrum(juce::Graphics &graphics) {
-    graphics.setFont(12.0F);
     graphics.setColour(juce::Colours::white);
+    graphics.setFont(12.0F);
     graphics.drawText("Output spectrum (approximate L/R power average)", 20, 378, 620, 22,
                       juce::Justification::left);
-    for (int decibels : {0, -30, -60, -90}) {
-        const int y = 405 - decibels * 150 / 90;
-        graphics.setColour(juce::Colour(0xff41474e));
-        graphics.drawHorizontalLine(y, 65, 615);
-        graphics.setColour(juce::Colours::white);
-        graphics.drawText(juce::String(decibels), 20, y - 8, 38, 16, juce::Justification::right);
+    paintSpectrum(graphics, {65, 405, 550, 150}, 0, 90, 0, juce::Colours::lightblue);
+}
+
+void AnalysisDisplay::paintSpectrum(juce::Graphics &graphics, juce::Rectangle<float> plot,
+                                    float gainDb, float rangeDb, int style, juce::Colour colour) {
+    graphics.setFont(12.0F);
+    rangeDb = juce::jlimit(30.F, 120.F, rangeDb);
+    for (int step = 0; step <= 4; ++step) {
+        const float y = plot.getY() + plot.getHeight() * step / 4;
+        graphics.setColour(juce::Colour(0xff353e4a));
+        graphics.drawHorizontalLine(juce::roundToInt(y), plot.getX(), plot.getRight());
+        graphics.setColour(juce::Colour(0xffb7c6d5));
+        graphics.drawText(juce::String(-rangeDb * step / 4, 0), int(plot.getX()) - 38, int(y) - 8,
+                          32, 16, juce::Justification::right);
     }
-    graphics.drawText("dBFS", 20, 564, 38, 18, juce::Justification::right);
     const double maximumHz = std::min(20000.0, analysis.getSpectrumSampleRate() * 0.5);
     if (maximumHz > 20) {
+        const auto xFor = [&](double hz) {
+            return plot.getX() +
+                   plot.getWidth() * float(std::log(hz / 20) / std::log(maximumHz / 20));
+        };
         for (int hz : {20, 100, 1000, 10000, 20000}) {
             if (hz > maximumHz)
                 continue;
-            const int x = 65 + int(550 * std::log(hz / 20.0) / std::log(maximumHz / 20));
-            graphics.setColour(juce::Colour(0xff41474e));
-            graphics.drawVerticalLine(x, 405, 555);
-            graphics.setColour(juce::Colours::white);
-            graphics.drawText(juce::String(hz), x - 24, 560, 48, 18, juce::Justification::centred);
+            const int x = int(xFor(hz));
+            graphics.setColour(juce::Colour(0xff353e4a));
+            graphics.drawVerticalLine(x, plot.getY(), plot.getBottom());
+            graphics.setColour(juce::Colour(0xffb7c6d5));
+            graphics.drawText(hz >= 1000 ? juce::String(hz / 1000) + "k" : juce::String(hz), x - 24,
+                              int(plot.getBottom()) + 4, 48, 18, juce::Justification::centred);
         }
+        juce::Graphics::ScopedSaveState save(graphics);
+        graphics.reduceClipRegion(plot.toNearestInt());
+        juce::Path line;
+        line.preallocateSpace(fftSize * 3);
+        bool first = true;
+        float firstX = plot.getX(), lastX = firstX;
+        // Aggregate by pixel column so a wide FFT does not draw thousands of
+        // overlapping bars in the high-frequency part of a logarithmic display.
+        int previousColumn = -1;
+        float columnTop = plot.getBottom();
+        auto point = [&](int column, float y) {
+            const float x = plot.getX() + column;
+            if (first) {
+                line.startNewSubPath(x, y);
+                firstX = x;
+                first = false;
+            } else
+                line.lineTo(x, y);
+            lastX = x;
+            if (style == 2)
+                graphics.fillRect(x, y, 1.F, plot.getBottom() - y);
+        };
+        graphics.setColour(colour);
+        for (int bin = 1; bin < fftSize / 2; ++bin) {
+            const double hz = bin * displayedSampleRate / fftSize;
+            if (hz < 20 || hz > maximumHz)
+                continue;
+            const int column = int(xFor(hz) - plot.getX());
+            const float y =
+                plot.getBottom() -
+                plot.getHeight() *
+                    juce::jlimit(0.F, 1.F, (spectrumDb[size_t(bin)] + gainDb + rangeDb) / rangeDb);
+            if (column != previousColumn) {
+                if (previousColumn >= 0)
+                    point(previousColumn, columnTop);
+                previousColumn = column;
+                columnTop = y;
+            } else
+                columnTop = std::min(columnTop, y);
+        }
+        if (previousColumn >= 0)
+            point(previousColumn, columnTop);
+        if (style == 1 && !first) {
+            auto fill = line;
+            fill.lineTo(lastX, plot.getBottom());
+            fill.lineTo(firstX, plot.getBottom());
+            fill.closeSubPath();
+            graphics.setColour(colour.withAlpha(.22F));
+            graphics.fillPath(fill);
+        }
+        graphics.setColour(colour);
+        if (style != 2)
+            graphics.strokePath(line, juce::PathStrokeType(1.5F));
     }
-    graphics.drawText("Hz", 610, 580, 30, 18, juce::Justification::right);
-    graphics.setColour(juce::Colours::lightblue);
-    graphics.strokePath(spectrumPath, juce::PathStrokeType(1.5F));
 }

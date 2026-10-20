@@ -105,6 +105,7 @@ void Saturator::reset() noexcept {
 std::uint32_t Saturator::getLatencySamples() const noexcept { return latencySamples_; }
 
 double Saturator::shape(double input, SaturatorModel model) noexcept {
+    // FUCKING MATH
     switch (model) {
     case SaturatorModel::softClip:
         return std::tanh(input);
@@ -130,7 +131,7 @@ double Saturator::shape(double input, SaturatorModel model) noexcept {
 }
 
 double Saturator::shapeAndTone(double input, ChannelState &channel, double drive, double bias,
-                               double tone) noexcept {
+                               double tone) const noexcept {
     double shaped = 0.0;
     for (std::size_t model = 0; model < weights_.size(); ++model) {
         if (weights_[model] != 0.0) {
@@ -145,7 +146,7 @@ double Saturator::shapeAndTone(double input, ChannelState &channel, double drive
 }
 
 double Saturator::processWet(double input, ChannelState &channel, double drive, double bias,
-                             double tone) noexcept {
+                             double tone) const noexcept {
     if (factor_ == OversamplingFactor::x1) {
         return shapeAndTone(input, channel, drive, bias, tone);
     }

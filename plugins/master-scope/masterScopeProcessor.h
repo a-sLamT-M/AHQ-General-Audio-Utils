@@ -52,8 +52,13 @@ class MasterScopeProcessor final : public juce::AudioProcessor {
     void setCurrentProgram(int) override {}
     const juce::String getProgramName(int) override { return "Default"; }
     void changeProgramName(int, const juce::String &) override {}
-    void getStateInformation(juce::MemoryBlock &b) override { state.getStateInformation(b); }
-    void setStateInformation(const void *p, int n) override { state.setStateInformation(p, n); }
+    void getStateInformation(juce::MemoryBlock &) override;
+    void setStateInformation(const void *, int) override;
+    // UI-only settings. Atomics allow host state capture independently of painting.
+    std::atomic<float> spectrumGainDb{0}, scopeGainDb{0};
+    std::atomic<int> spectrumRange{90}, displayStyle{1}, displayTheme{0};
+    std::atomic<unsigned> displayRevision{0};
+    std::atomic<int> editorWidth{1180}, editorHeight{780};
     Values readValues() const noexcept;
     juce::AudioProcessorValueTreeState &getParameters() noexcept { return parameters; }
     bool applyUserValues(const Values &v, const juce::String &name) {
@@ -61,10 +66,8 @@ class MasterScopeProcessor final : public juce::AudioProcessor {
     }
     bool undo() { return state.undo(); }
     bool redo() { return state.redo(); }
-    juce::String createPresetXml() const { return state.createPresetXml(); }
-    bool loadPresetXml(const juce::String &s, bool undoable = true) {
-        return state.loadPresetXml(s, undoable);
-    }
+    juce::String createPresetXml() const;
+    bool loadPresetXml(const juce::String &, bool undoable = true);
     /// Request is coalesced and applied by audio at a block boundary. No UI mutation of DSP
     /// history.
     void requestReset() noexcept { requestedGeneration.fetch_add(1, std::memory_order_release); }
@@ -77,6 +80,7 @@ class MasterScopeProcessor final : public juce::AudioProcessor {
     PluginAnalysis &getAnalysis() noexcept { return analysis; }
 
   private:
+    bool restorePresetXml(const juce::String &, bool notifyHost);
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
     void stopWorker();
     void workerLoop();
@@ -98,8 +102,7 @@ class MasterScopeProcessor final : public juce::AudioProcessor {
     std::atomic<int> retiredBank{-1};
     int activeBank = 0;
     std::atomic<unsigned> requestedGeneration{1}, measurementGeneration{0}, gapGeneration{0};
-    unsigned audioGeneration = 0, channels = 2, peakFrames = 0, peakInterval = 4800,
-             phaseDivider = 0;
+    unsigned audioGeneration = 0, channels = 2, peakFrames = 0, peakInterval = 4800;
     bool prepared = false, supportsLoudness = false, previousRun = true, previousHold = true;
     std::atomic<bool> pending{false}, supported{false}, displayEnabled{false};
     static constexpr int eventCapacity = 256, phaseCapacity = 4096;
