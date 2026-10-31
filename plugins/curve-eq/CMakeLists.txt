@@ -7,7 +7,7 @@ juce_add_plugin(ahq_curve_eq
     PLUGIN_MANUFACTURER_CODE Ahqa PLUGIN_CODE Creq PRODUCT_NAME "AHQ Curve EQ"
     LV2URI "https://ahq.audio/plugins/curve-eq" FORMATS ${curve_eq_formats}
     IS_SYNTH FALSE NEEDS_MIDI_INPUT FALSE NEEDS_MIDI_OUTPUT FALSE IS_MIDI_EFFECT FALSE
-    COPY_PLUGIN_AFTER_BUILD FALSE)
+    EDITOR_WANTS_KEYBOARD_FOCUS TRUE COPY_PLUGIN_AFTER_BUILD FALSE)
 target_sources(ahq_curve_eq PRIVATE
     curveEqProcessor.cpp curveEqProcessor.h curveEqEditor.cpp curveEqEditor.h
     ../common/pluginState.cpp ../common/pluginAnalysis.cpp ../common/analysisDisplay.cpp)

@@ -55,8 +55,8 @@ ElevationEditor::ElevationEditor(ElevationProcessor &p) : AudioProcessorEditor(p
     undo.onClick = [this] { processor.undo(); };
     redo.onClick = [this] { processor.redo(); };
     setResizable(true, true);
-    setResizeLimits(760, 686, 1600, 1266);
-    setSize(940, 766);
+    setResizeLimits(760, 686, 2000, 1266);
+    setSize(1600, 766);
 }
 void ElevationEditor::resized() {
     presetBar.setBounds(0, getHeight() - ahq::ui::PresetBar::height, getWidth(),

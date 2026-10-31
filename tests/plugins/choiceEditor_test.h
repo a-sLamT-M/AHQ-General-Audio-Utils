@@ -72,6 +72,7 @@ bool testChoiceEditor(std::initializer_list<ChoiceParameter> choices) {
             std::cerr << "FAILED: " << message << '\n';
         passed &= condition;
     };
+    check(editor->getWidth() == 1600, "new plugin editor defaults to 1600 pixels wide");
     for (const auto &choice : choices) {
         juce::ComboBox *combo = nullptr;
         auto *parameter = processor->getParameters().getParameter(choice.parameterId);

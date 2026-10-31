@@ -64,7 +64,7 @@ SynthEditor::SynthEditor(SynthProcessor &p)
     status.setJustificationType(juce::Justification::centredRight);
     setResizable(true, true);
     setResizeLimits(1200, 1000, 2000, 1600);
-    setSize(1380, 1100);
+    setSize(1600, 1100);
     rebuild();
     visibilityChanged();
 }

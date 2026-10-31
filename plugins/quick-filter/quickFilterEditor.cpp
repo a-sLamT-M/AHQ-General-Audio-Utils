@@ -13,7 +13,7 @@ QuickFilterEditor::QuickFilterEditor(QuickFilterProcessor &owner)
     };
     setResizable(true, true);
     setResizeLimits(1120, 850, 2000, 1500);
-    setSize(1280, 940);
+    setSize(1600, 940);
     configureSlider(frequency, 1, " Hz");
     frequency.setSkewFactorFromMidPoint(1000);
     configureSlider(q, 2, "");

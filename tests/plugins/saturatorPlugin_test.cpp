@@ -418,6 +418,33 @@ bool testContinuousSpectrum() {
     passed &= expect(hasTone(display), "overlapping windows show audio before 2048 new samples");
     return passed;
 }
+bool testSpectrumGrid() {
+    PluginAnalysis analysis;
+    AnalysisDisplay display(analysis);
+    const juce::Rectangle<float> plot{50, 10, 900, 360};
+    const auto render = [&](bool levelGrid) {
+        juce::Image image(juce::Image::RGB, 1000, 420, true);
+        {
+            juce::Graphics graphics(image);
+            display.paintSpectrum(graphics, plot, 0, 90, 0, juce::Colours::cyan, levelGrid);
+        }
+        return image;
+    };
+    const auto image = render(true);
+    const auto xFor = [&](double hz) {
+        return juce::roundToInt(plot.getX() +
+                                plot.getWidth() * std::log(hz / 20) / std::log(1000.));
+    };
+    bool passed = expect(image.getPixelAt(xFor(30), 21) == juce::Colour(0xff273138),
+                         "spectrum includes intermediate frequency grid lines");
+    passed &= expect(image.getPixelAt(xFor(50), 21) == juce::Colour(0xff3a454e),
+                     "major frequency references are brighter");
+    passed &= expect(image.getPixelAt(51, 34) == juce::Colour(0xff273138),
+                     "spectrum has a 6 dB level grid");
+    passed &= expect(render(false).getPixelAt(51, 34) == juce::Colours::black,
+                     "EQ can supply its own gain grid without duplicate level lines");
+    return passed;
+}
 bool renderEditor(const juce::File &destination) {
     SaturatorProcessor p;
     p.loadFactoryPreset(3);
@@ -468,6 +495,7 @@ int main(int argc, char **argv) {
     passed &= testCurvesAndAlignment();
     passed &= testWetQualityTransition();
     passed &= testContinuousSpectrum();
+    passed &= testSpectrumGrid();
     if (argc == 2)
         passed &= renderEditor(juce::File(juce::String::fromUTF8(argv[1])));
     return passed ? 0 : 1;

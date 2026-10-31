@@ -17,7 +17,7 @@ ChaosEditor::ChaosEditor(ChaosProcessor &owner)
     };
     setResizable(true, true);
     setResizeLimits(1120, 900, 2000, 1500);
-    setSize(1280, 1000);
+    setSize(1600, 1000);
     constexpr std::array<const char *, 10> names{
         "Slice",      "Probability", "Repeats",        "Reverse chance", "Pitch range",
         "Pan amount", "Drive",       "Distort chance", "Seed (integer)", "Wet mix"};

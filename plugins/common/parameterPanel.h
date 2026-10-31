@@ -174,7 +174,7 @@ class ParameterPanel final : public juce::AudioProcessorEditor,
             groups = {{"Controls", 0, int(controls.size())}};
         setResizable(true, true);
         setResizeLimits(1000, 850, 2000, 1500);
-        setSize(1200, 960);
+        setSize(1600, 960);
         visibilityChanged();
     }
     int getControlParameterIndex(juce::Component &c) override { return controlParameterIndex(c); }

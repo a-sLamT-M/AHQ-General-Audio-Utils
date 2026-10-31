@@ -16,7 +16,7 @@ SaturatorEditor::SaturatorEditor(SaturatorProcessor &owner)
     };
     setResizable(true, true);
     setResizeLimits(1120, 900, 2000, 1500);
-    setSize(1280, 1000);
+    setSize(1600, 1000);
     constexpr std::array<const char *, 4> names{"Drive", "Bias", "Tone", "Wet mix (0-1)"};
     constexpr std::array<const char *, 4> suffixes{" dB", "", "", ""};
     constexpr std::array<int, 4> indices{1, 2, 3, 5};

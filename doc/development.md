@@ -114,6 +114,24 @@ and folder access. DSP-specific editors and their existing native parameter cont
 remain separate. The bar reserves 66 pixels below the existing content; Master Scope
 continues storing content dimensions in its existing state fields.
 
+New plugin editors default to 1600 pixels wide. Existing Master Scope project/preset
+dimensions still take precedence when restoring saved state. Shared spectrum plots
+use logarithmic major/minor frequency references and a 6 dB level grid; labels thin
+out when the plot is small. Curve EQ uses its own symmetric gain grid, initially
+3 dB per division over a +/-12 dB range, and a full-width graph with floating band
+controls instead of a fixed side panel.
+
+In Curve EQ, drag the response curve to create a band, or double-click/Ctrl-click
+the graph. Creation at the left/right edges chooses cuts; dragging the response at
+those edges chooses shelves. Ctrl-click nodes for multiple selection or drag a
+background rectangle, then drag selected nodes together. The wheel adjusts Q,
+Ctrl+vertical drag adjusts Q, Shift makes edits finer, and Alt+drag locks an axis.
+Alt-click toggles a band; Alt-double-click creates a dynamic bell/shelf and Alt+wheel
+adjusts its range. Delete removes the selection, Escape clears it, double-clicking a
+node opens frequency entry (including `2k` notation), and the node context menu
+provides shapes, channels, slopes and host automation. These edits retain the
+existing host parameter IDs, gesture notifications and undo history.
+
 `PresetLibrary` uses JUCE's system Documents location plus
 `AHQ/Presets/<product name>/`. New files use `.ahqpreset`, atomic temporary-file
 replacement, sanitized names and non-overwriting revision suffixes. A browser scans

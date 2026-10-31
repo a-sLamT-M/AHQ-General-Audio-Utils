@@ -92,7 +92,7 @@ bool MasterScopeProcessor::restorePresetXml(const juce::String &text, bool notif
         spectrumRange.store(range == 60 || range == 120 ? range : 90);
         displayStyle.store(std::clamp(view->getIntAttribute("style", 1), 0, 2));
         displayTheme.store(std::clamp(view->getIntAttribute("theme", 0), 0, 2));
-        editorWidth.store(std::clamp(view->getIntAttribute("width", 1180), 980, 2000));
+        editorWidth.store(std::clamp(view->getIntAttribute("width", 1600), 980, 2000));
         editorHeight.store(std::clamp(view->getIntAttribute("height", 780), 680, 1400));
         displayRevision.fetch_add(1);
     }

@@ -75,8 +75,8 @@ VolumeEnvelopeEditor::VolumeEnvelopeEditor(VolumeEnvelopeProcessor &p)
         repaint();
     };
     setResizable(true, true);
-    setResizeLimits(760, 606, 1500, 1066);
-    setSize(940, 686);
+    setResizeLimits(760, 606, 2000, 1066);
+    setSize(1600, 686);
     timerCallback();
     visibilityChanged();
 }

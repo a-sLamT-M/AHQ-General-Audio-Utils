@@ -19,7 +19,7 @@ TrueLimiterEditor::TrueLimiterEditor(TrueLimiterProcessor &owner)
     };
     setResizable(true, true);
     setResizeLimits(1200, 1000, 2000, 1600);
-    setSize(1380, 1100);
+    setSize(1600, 1100);
     constexpr std::array<const char *, 6> names{"Peak ceiling", "Target LUFS",
                                                 "Input gain",   "Lookahead",
                                                 "Release",      "Mix before protection"};

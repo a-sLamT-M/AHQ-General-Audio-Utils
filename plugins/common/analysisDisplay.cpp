@@ -157,22 +157,30 @@ void AnalysisDisplay::paintSpectrum(juce::Graphics &graphics) {
 }
 
 void AnalysisDisplay::paintConfiguredSpectrum(juce::Graphics &g, juce::Rectangle<float> plot,
-                                              juce::Colour colour) {
+                                              juce::Colour colour, bool drawLevelGrid) {
     paintSpectrum(g, plot, controls.preferences.gainDb.load(), 90,
-                  controls.preferences.style.load(), colour);
+                  controls.preferences.style.load(), colour, drawLevelGrid);
 }
 
 void AnalysisDisplay::paintSpectrum(juce::Graphics &graphics, juce::Rectangle<float> plot,
-                                    float gainDb, float rangeDb, int style, juce::Colour colour) {
+                                    float gainDb, float rangeDb, int style, juce::Colour colour,
+                                    bool drawLevelGrid) {
+    if (plot.isEmpty())
+        return;
     graphics.setFont(12.0F);
     rangeDb = juce::jlimit(30.F, 120.F, rangeDb);
-    for (int step = 0; step <= 4; ++step) {
-        const float y = plot.getY() + plot.getHeight() * step / 4;
-        graphics.setColour(juce::Colour(0xff353e4a));
-        graphics.drawHorizontalLine(juce::roundToInt(y), plot.getX(), plot.getRight());
-        graphics.setColour(juce::Colour(0xffb7c6d5));
-        graphics.drawText(juce::String(-rangeDb * step / 4, 0), int(plot.getX()) - 38, int(y) - 8,
-                          32, 16, juce::Justification::right);
+    const int labelStep = 6 * std::max(1, int(std::ceil(rangeDb * 22 / plot.getHeight() / 6)));
+    for (int db = 0; db <= int(rangeDb); db += 6) {
+        const float y = plot.getY() + plot.getHeight() * db / rangeDb;
+        if (drawLevelGrid) {
+            graphics.setColour(juce::Colour(db % 12 == 0 ? 0xff3a454e : 0xff273138));
+            graphics.drawHorizontalLine(juce::roundToInt(y), plot.getX(), plot.getRight());
+        }
+        if (db % labelStep == 0) {
+            graphics.setColour(juce::Colour(0xffb7c6d5));
+            graphics.drawText(juce::String(-db), int(plot.getX()) - 38, int(y) - 8, 32, 16,
+                              juce::Justification::right);
+        }
     }
     const double maximumHz = std::min(20000.0, analysis.getSpectrumSampleRate() * 0.5);
     if (maximumHz > 20) {
@@ -180,16 +188,24 @@ void AnalysisDisplay::paintSpectrum(juce::Graphics &graphics, juce::Rectangle<fl
             return plot.getX() +
                    plot.getWidth() * float(std::log(hz / 20) / std::log(maximumHz / 20));
         };
-        for (int hz : {20, 100, 1000, 10000, 20000}) {
-            if (hz > maximumHz)
-                continue;
-            const int x = int(xFor(hz));
-            graphics.setColour(juce::Colour(0xff353e4a));
-            graphics.drawVerticalLine(x, plot.getY(), plot.getBottom());
-            graphics.setColour(juce::Colour(0xffb7c6d5));
-            graphics.drawText(hz >= 1000 ? juce::String(hz / 1000) + "k" : juce::String(hz), x - 24,
-                              int(plot.getBottom()) + 4, 48, 18, juce::Justification::centred);
-        }
+        float lastLabelX = plot.getX() - 60;
+        for (int decade : {10, 100, 1000, 10000})
+            for (int multiple = 1; multiple <= 9; ++multiple) {
+                const int hz = decade * multiple;
+                if (hz < 20 || hz > maximumHz)
+                    continue;
+                const int x = juce::roundToInt(xFor(hz));
+                const bool major = multiple == 1 || multiple == 2 || multiple == 5;
+                graphics.setColour(juce::Colour(major ? 0xff3a454e : 0xff273138));
+                graphics.drawVerticalLine(x, plot.getY(), plot.getBottom());
+                if (major && x - lastLabelX >= 46) {
+                    graphics.setColour(juce::Colour(0xffb7c6d5));
+                    graphics.drawText(hz >= 1000 ? juce::String(hz / 1000) + "k" : juce::String(hz),
+                                      x - 24, int(plot.getBottom()) + 4, 48, 18,
+                                      juce::Justification::centred);
+                    lastLabelX = float(x);
+                }
+            }
         juce::Graphics::ScopedSaveState save(graphics);
         graphics.reduceClipRegion(plot.toNearestInt());
         juce::Path line;

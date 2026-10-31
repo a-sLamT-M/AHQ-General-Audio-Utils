@@ -10,13 +10,14 @@ class AnalysisDisplay {
     ahq::ui::SpectrumControls controls;
     void setSpectrumBounds(juce::Rectangle<float> bounds) { spectrumBounds = bounds; }
     juce::Rectangle<float> getSpectrumBounds() const { return spectrumBounds; }
-    void paintConfiguredSpectrum(juce::Graphics &, juce::Rectangle<float>, juce::Colour);
+    void paintConfiguredSpectrum(juce::Graphics &, juce::Rectangle<float>, juce::Colour,
+                                 bool drawLevelGrid = true);
     void refresh(bool spectrumVisible);
     void paintMeters(juce::Graphics &);
     void paintSpectrum(juce::Graphics &);
     // Display gain only: never changes the audio or published measurements.
     void paintSpectrum(juce::Graphics &, juce::Rectangle<float>, float gainDb, float rangeDb,
-                       int style, juce::Colour colour);
+                       int style, juce::Colour colour, bool drawLevelGrid = true);
 
   private:
     void updateSpectrum(double nowMs);

@@ -35,7 +35,7 @@ SpaceLabEditor::SpaceLabEditor(SpaceLabProcessor &owner)
     };
     setResizable(true, true);
     setResizeLimits(1120, 900, 2000, 1500);
-    setSize(1280, 1000);
+    setSize(1600, 1000);
     constexpr std::array<const char *, 10> names{
         "Width",        "Signed Haas", "Left tilt", "Right tilt", "Invert left",
         "Invert right", "Mod rate",    "Mod depth", "Split mono", "Wet mix"};

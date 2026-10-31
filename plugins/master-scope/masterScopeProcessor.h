@@ -60,7 +60,7 @@ class MasterScopeProcessor final : public juce::AudioProcessor {
     std::atomic<int> spectrumRange{90}, displayStyle{1}, displayTheme{0},
         spectrumFrequencySmoothing{1};
     std::atomic<unsigned> displayRevision{0};
-    std::atomic<int> editorWidth{1180}, editorHeight{780};
+    std::atomic<int> editorWidth{1600}, editorHeight{780};
     Values readValues() const noexcept;
     juce::AudioProcessorValueTreeState &getParameters() noexcept { return parameters; }
     bool applyUserValues(const Values &v, const juce::String &name) {

@@ -16,7 +16,7 @@ TransientEditor::TransientEditor(TransientProcessor &owner)
     };
     setResizable(true, true);
     setResizeLimits(1120, 900, 2000, 1500);
-    setSize(1280, 1000);
+    setSize(1600, 1000);
     const std::array<const char *, 5> names{"Attack", "Sustain", "Sensitivity", "Time",
                                             "Wet mix (0-1)"};
     constexpr std::array<const char *, 5> suffixes{" dB", " dB", " dBFS", " ms", ""};

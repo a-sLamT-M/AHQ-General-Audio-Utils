@@ -50,13 +50,21 @@ class SpectrumControls final : public juce::Component {
         auto row = getLocalBounds();
         style.setBounds(row.removeFromLeft(90).reduced(0, 3));
         frequency.setBounds(row.removeFromLeft(132).reduced(4, 3));
-        const int width = row.getWidth() / 3;
+        const int width = row.getWidth() / (showArea ? 3 : 2);
         for (auto pair :
              {std::pair{&smoothLabel, &smoothing}, {&shareLabel, &share}, {&gainLabel, &gain}}) {
+            if (!showArea && pair.second == &share)
+                continue;
             auto cell = row.removeFromLeft(width).reduced(3, 0);
             pair.first->setBounds(cell.removeFromLeft(60));
             pair.second->setBounds(cell);
         }
+    }
+    void setAreaControlVisible(bool visible) {
+        showArea = visible;
+        share.setVisible(visible);
+        shareLabel.setVisible(visible);
+        resized();
     }
     void synchronise() {
         style.setSelectedId(preferences.style.load() + 1, juce::dontSendNotification);
@@ -70,6 +78,7 @@ class SpectrumControls final : public juce::Component {
     SpectrumPreferences &preferences;
 
   private:
+    bool showArea = true;
     void changed() {
         if (onChange)
             onChange();

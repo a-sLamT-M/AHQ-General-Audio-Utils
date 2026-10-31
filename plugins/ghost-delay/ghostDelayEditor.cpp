@@ -17,7 +17,7 @@ GhostDelayEditor::GhostDelayEditor(GhostDelayProcessor &owner)
     };
     setResizable(true, true);
     setResizeLimits(1120, 900, 2000, 1500);
-    setSize(1280, 1000);
+    setSize(1600, 1000);
     constexpr std::array<const char *, 9> names{"Grain",      "Delay",          "Pitch",
                                                 "Scatter",    "Density",        "Feedback",
                                                 "Randomness", "Seed (integer)", "Wet mix"};

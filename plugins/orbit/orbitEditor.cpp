@@ -16,7 +16,7 @@ OrbitEditor::OrbitEditor(OrbitProcessor &owner)
     };
     setResizable(true, true);
     setResizeLimits(1120, 900, 2000, 1500);
-    setSize(1280, 1000);
+    setSize(1600, 1000);
     constexpr std::array<const char *, 6> names{"Rate",  "Manual BPM", "Beats / turn",
                                                 "Depth", "Phase",      "Wet mix"};
     constexpr std::array<const char *, 6> suffixes{" Hz", "", "", "", " deg", ""};
