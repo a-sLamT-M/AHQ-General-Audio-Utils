@@ -1,3 +1,4 @@
+#include "../../plugins/common/analysisDisplay.h"
 #include "choiceEditor_test.h"
 #include "saturatorProcessor.h"
 #include "userPreset_test.h"
@@ -342,6 +343,81 @@ bool testWetQualityTransition() {
     }
     return passed;
 }
+bool testContinuousSpectrum() {
+    bool passed = true;
+    const auto hasTone = [](AnalysisDisplay &display) {
+        juce::Image image(juce::Image::RGB, 320, 100, true);
+        {
+            juce::Graphics graphics(image);
+            display.paintSpectrum(graphics, {0, 0, 320, 100}, 0, 90, 0, juce::Colours::cyan);
+        }
+        for (int y = 0; y < 20; ++y)
+            for (int x = 0; x < image.getWidth(); ++x) {
+                const auto pixel = image.getPixelAt(x, y);
+                if (pixel.getRed() < 32 && pixel.getGreen() > 192 && pixel.getBlue() > 192)
+                    return true;
+            }
+        return false;
+    };
+    for (const double sampleRate : {8000.0, 44100.0, 48000.0, 96000.0, 192000.0}) {
+        PluginAnalysis analysis;
+        analysis.prepare(sampleRate);
+        analysis.setSpectrumEnabled(true);
+        analysis.spectrumPreferences.smoothingMs.store(0);
+        analysis.spectrumPreferences.frequencySmoothing.store(0);
+        AnalysisDisplay display(analysis);
+        display.refresh(true);
+        int offset = 0, missingFrames = 0;
+        // Simulate 30 Hz display callbacks and varying host block partitions without sleeping.
+        for (int tick = 1; tick <= 60; ++tick) {
+            const int end = int(tick * sampleRate / 30);
+            while (offset < end) {
+                const int frames = std::min(1 + (offset % 1024), end - offset);
+                juce::AudioBuffer<float> block(2, frames);
+                for (int i = 0; i < frames; ++i) {
+                    const float sample =
+                        .5F * float(std::sin(2 * std::numbers::pi * 32 * (offset + i) / 2048.0));
+                    block.setSample(0, i, sample);
+                    block.setSample(1, i, -sample);
+                }
+                analysis.publish(block, .5F);
+                offset += frames;
+            }
+            display.refresh(true);
+            if (tick > 16 && !hasTone(display))
+                ++missingFrames;
+        }
+        std::cout << "Spectrum " << sampleRate << " Hz: " << missingFrames
+                  << "/44 steady-tone frames dropped\n";
+        passed &= expect(missingFrames == 0, "continuous audio never becomes an empty spectrum");
+        display.refresh(true);
+        passed &= expect(hasTone(display), "a callback without new samples retains the spectrum");
+        analysis.setSpectrumEnabled(false);
+        juce::Thread::sleep(160);
+        display.refresh(true);
+        passed &= expect(!hasTone(display), "stopped audio eventually clears the spectrum");
+    }
+    PluginAnalysis analysis;
+    analysis.prepare(48000);
+    analysis.setSpectrumEnabled(true);
+    analysis.spectrumPreferences.smoothingMs.store(0);
+    analysis.spectrumPreferences.frequencySmoothing.store(0);
+    AnalysisDisplay display(analysis);
+    juce::AudioBuffer<float> silence(2, 2048);
+    silence.clear();
+    analysis.publish(silence, 0);
+    display.refresh(true);
+    juce::AudioBuffer<float> onset(2, 1024);
+    for (int i = 0; i < onset.getNumSamples(); ++i) {
+        const float sample = .5F * float(std::sin(2 * std::numbers::pi * 32 * i / 2048.0));
+        onset.setSample(0, i, sample);
+        onset.setSample(1, i, -sample);
+    }
+    analysis.publish(onset, .5F);
+    display.refresh(true);
+    passed &= expect(hasTone(display), "overlapping windows show audio before 2048 new samples");
+    return passed;
+}
 bool renderEditor(const juce::File &destination) {
     SaturatorProcessor p;
     p.loadFactoryPreset(3);
@@ -391,6 +467,7 @@ int main(int argc, char **argv) {
     passed &= testBypass();
     passed &= testCurvesAndAlignment();
     passed &= testWetQualityTransition();
+    passed &= testContinuousSpectrum();
     if (argc == 2)
         passed &= renderEditor(juce::File(juce::String::fromUTF8(argv[1])));
     return passed ? 0 : 1;

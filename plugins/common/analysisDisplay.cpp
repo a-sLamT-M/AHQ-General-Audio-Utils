@@ -7,6 +7,7 @@ AnalysisDisplay::AnalysisDisplay(PluginAnalysis &a) : controls(a.spectrumPrefere
     windowSum = 0;
     for (float sample : unityWindow)
         windowSum += sample;
+    targetSpectrumDb.fill(-120);
     spectrumDb.fill(-120);
     smoothedSpectrumDb.fill(-120);
 }
@@ -20,7 +21,12 @@ void AnalysisDisplay::refresh(bool spectrumVisible) {
     for (size_t index = 0; index < levels.size(); ++index)
         displayedLevels[index] = std::max(levels[index], displayedLevels[index] * 0.88F);
     if (spectrumVisible)
-        updateSpectrum();
+        updateSpectrum(now);
+    else {
+        windowSamples = windowPosition = 0;
+        lastSpectrumDataMs = 0;
+        targetSpectrumDb.fill(-120);
+    }
 }
 void AnalysisDisplay::paintMeters(juce::Graphics &graphics) {
     if (!spectrumBounds.isEmpty()) {
@@ -61,24 +67,38 @@ void AnalysisDisplay::paintMeters(juce::Graphics &graphics) {
                           juce::Justification::right);
     }
 }
-void AnalysisDisplay::updateSpectrum() {
+void AnalysisDisplay::updateSpectrum(double nowMs) {
     const double sampleRate = analysis.getSpectrumSampleRate();
     if (sampleRate != displayedSampleRate) {
         displayedSampleRate = sampleRate;
         analysis.setSpectrumEnabled(true);
+        windowSamples = windowPosition = 0;
+        lastSpectrumDataMs = 0;
+        targetSpectrumDb.fill(-120);
         spectrumDb.fill(-120);
         smoothedSpectrumDb.fill(-120);
         return;
     }
     bool received = false;
-    // Drain only a bounded number of windows so a busy producer cannot monopolize the GUI.
-    for (int count = 0; count < 4; ++count) {
-        if (!analysis.readSpectrum(std::span<float>(fftLeft.data(), fftSize),
-                                   std::span<float>(fftRight.data(), fftSize)))
+    // Retain a rolling unwindowed frame. Smaller hops let consecutive GUI callbacks
+    // use overlapping audio instead of waiting for another complete FFT window.
+    // Drain at most one queue capacity and perform only one FFT per channel.
+    for (int count = 0; count < 16; ++count) {
+        if (!analysis.readSpectrum(std::span<float>(windowLeft.data() + windowPosition, hopSize),
+                                   std::span<float>(windowRight.data() + windowPosition, hopSize)))
             break;
         received = true;
+        windowPosition = (windowPosition + hopSize) % fftSize;
+        windowSamples = std::min(fftSize, windowSamples + hopSize);
     }
-    if (received) {
+    if (received)
+        lastSpectrumDataMs = nowMs;
+    if (received && windowSamples == fftSize) {
+        for (int i = 0; i < fftSize; ++i) {
+            const auto source = size_t((windowPosition + i) % fftSize);
+            fftLeft[size_t(i)] = windowLeft[source];
+            fftRight[size_t(i)] = windowRight[source];
+        }
         window.multiplyWithWindowingTable(fftLeft.data(), fftSize);
         window.multiplyWithWindowingTable(fftRight.data(), fftSize);
         fft.performFrequencyOnlyForwardTransform(fftLeft.data());
@@ -88,12 +108,17 @@ void AnalysisDisplay::updateSpectrum() {
             const float right = fftRight[size_t(bin)] * 2 / windowSum;
             const float power = (left * left + right * right) * 0.5F;
             const float decibels = 10 * std::log10(std::max(power, 1.0e-12F));
-            spectrumDb[size_t(bin)] += smoothingAlpha * (decibels - spectrumDb[size_t(bin)]);
+            targetSpectrumDb[size_t(bin)] = decibels;
         }
-    } else {
-        for (auto &value : spectrumDb)
-            value += smoothingAlpha * (-120.0F - value);
+    } else if (!received && lastSpectrumDataMs > 0 &&
+               nowMs - lastSpectrumDataMs > std::max(100.0, 2000.0 * hopSize / sampleRate)) {
+        // An incomplete hop is not silence. Decay only after audio delivery stops,
+        // and avoid joining pre-stop samples onto a later stream.
+        targetSpectrumDb.fill(-120);
+        windowSamples = windowPosition = 0;
     }
+    for (size_t i = 0; i < spectrumDb.size(); ++i)
+        spectrumDb[i] += smoothingAlpha * (targetSpectrumDb[i] - spectrumDb[i]);
     const int mode = juce::jlimit(0, 3, controls.preferences.frequencySmoothing.load());
     if (mode == 0) {
         smoothedSpectrumDb = spectrumDb;

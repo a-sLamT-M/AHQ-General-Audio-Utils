@@ -19,17 +19,22 @@ class AnalysisDisplay {
                        int style, juce::Colour colour);
 
   private:
-    void updateSpectrum();
+    void updateSpectrum(double nowMs);
     PluginAnalysis &analysis;
     std::array<float, 2> displayedLevels{};
     static constexpr int fftSize = 2048;
+    static constexpr int hopSize = fftSize / 4;
     juce::dsp::FFT fft{11};
     juce::dsp::WindowingFunction<float> window{fftSize, juce::dsp::WindowingFunction<float>::hann,
                                                false};
     std::array<float, fftSize * 2> fftLeft{}, fftRight{};
+    std::array<float, fftSize> windowLeft{}, windowRight{};
+    std::array<float, fftSize / 2> targetSpectrumDb{};
     std::array<float, fftSize / 2> spectrumDb{}, smoothedSpectrumDb{};
+    int windowPosition = 0, windowSamples = 0;
     juce::Rectangle<float> spectrumBounds;
     double lastRefreshMs = 0;
+    double lastSpectrumDataMs = 0;
     float smoothingAlpha = 1;
     float windowSum = 1;
     double displayedSampleRate = 48000;
