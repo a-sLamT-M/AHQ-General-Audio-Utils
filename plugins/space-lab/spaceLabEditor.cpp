@@ -1,5 +1,13 @@
 #include "spaceLabEditor.h"
+#include "../common/ui/parameterGroups.h"
 #include <cmath>
+namespace {
+constexpr ahq::ui::ParameterGroup uiGroups[]{{"Width and delay", 0, 2},
+                                             {"Colour", 2, 2},
+                                             {"Polarity", 4, 2},
+                                             {"Modulation", 6, 2},
+                                             {"Routing and mix", 8, 2}};
+}
 
 namespace {
 int toggleIndexForParameter(int index) {
@@ -20,7 +28,14 @@ SpaceLabEditor::SpaceLabEditor(SpaceLabProcessor &owner)
     : AudioProcessorEditor(owner), ComponentMovementWatcher(this), processor(owner),
       display(owner.getAnalysis()) {
     addAndMakeVisible(presetBar);
-    setSize(660, 816);
+    addAndMakeVisible(display.controls);
+    display.controls.onChange = [this] {
+        resized();
+        repaint();
+    };
+    setResizable(true, true);
+    setResizeLimits(1120, 900, 2000, 1500);
+    setSize(1280, 1000);
     constexpr std::array<const char *, 10> names{
         "Width",        "Signed Haas", "Left tilt", "Right tilt", "Invert left",
         "Invert right", "Mod rate",    "Mod depth", "Split mono", "Wet mix"};
@@ -146,43 +161,40 @@ void SpaceLabEditor::timerCallback() {
     undoButton.setEnabled(processor.canUndo());
     redoButton.setEnabled(processor.canRedo());
     display.refresh(spectrumVisible);
-    repaint();
+    repaint(display.getSpectrumBounds().withTrimmedBottom(-58).toNearestInt());
 }
 
 void SpaceLabEditor::paint(juce::Graphics &graphics) {
     appearance.paintBackground(graphics, getWidth());
     graphics.setColour(juce::Colours::white);
-    graphics.setFont(22.0F);
-    graphics.drawText("AHQ Space Lab", 20, 12, 400, 32, juce::Justification::left);
-    graphics.setFont(14.0F);
-    graphics.setFont(12.0F);
-    graphics.drawText(
-        processor.readValues()[8] == 1
-            ? "Split: left is dry M; right is processed M. Negative Haas has no effect."
-            : "Width / Haas / independent colour / right delay modulation",
-        20, 390, 620, 20, juce::Justification::left);
-    {
-        juce::Graphics::ScopedSaveState save(graphics);
-        graphics.addTransform(juce::AffineTransform::translation(0, 140));
-        display.paintMeters(graphics);
-        display.paintSpectrum(graphics);
-    }
+    graphics.setFont(juce::FontOptions(23));
+    graphics.drawText(processor.getName(), 20, 10, 370, 32, juce::Justification::left);
+    appearance.paintFlow(graphics, {20, 48, 620, 24},
+                         {"Input", "Stereo routing + processing", "Output"});
+    ahq::ui::paintGroups(graphics, appearance, labels, sliders, uiGroups);
+    display.paintSpectrum(graphics);
+    display.paintMeters(graphics);
+    graphics.setFont(juce::FontOptions(12));
+    graphics.drawText(processor.readValues()[8] == 1 ? "Split: left = dry M; right = processed M"
+                                                     : "Stereo processing",
+                      20, getHeight() - 94, getWidth() - 40, 20, juce::Justification::left);
 }
 void SpaceLabEditor::resized() {
     presetBar.setBounds(0, getHeight() - ahq::ui::PresetBar::height, getWidth(),
                         ahq::ui::PresetBar::height);
-    undoButton.setBounds(440, 55, 90, 28);
-    redoButton.setBounds(550, 55, 90, 28);
-    for (int index = 0; index < 10; ++index) {
-        const bool first = index < 5;
-        const int x = 15 + (first ? index : index - 5) * 128;
-        const int width = 124;
-        const int y = first ? 96 : 242;
-        labels[size_t(index)].setBounds(x, y, width, 24);
-        sliders[size_t(index)].setBounds(x, y + 24, width, 113);
-        if (index == 4 || index == 5 || index == 8)
-            toggles[size_t(toggleIndexForParameter(index))].setBounds(x + 20, y + 50, width - 30,
-                                                                      35);
+    undoButton.setBounds(getWidth() - 188, 12, 76, 28);
+    redoButton.setBounds(getWidth() - 100, 12, 76, 28);
+    presets.setBounds(getWidth() - 460, 12, 250, 28);
+    display.controls.setBounds(20, 80, getWidth() - 40, 30);
+    const int rightWidth = juce::jmax(
+        320, int((getWidth() - 60) * (1 - display.controls.preferences.share.load() / 100.F)));
+    const int rightX = getWidth() - rightWidth - 20;
+    display.setSpectrumBounds({20, 122, float(rightX - 40), float(getHeight() - 122 - 154)});
+
+    ahq::ui::layoutGroups(labels, sliders, uiGroups,
+                          {rightX, 122, rightWidth, getHeight() - 122 - 104});
+    for (int i : {4, 5, 8}) {
+        auto &toggle = toggles[size_t(toggleIndexForParameter(i))];
+        toggle.setBounds(sliders[size_t(i)].getBounds().withHeight(30));
     }
-    presets.setBounds(20, 475, 250, 28);
 }

@@ -1,11 +1,23 @@
 #include "ghostDelayEditor.h"
+#include "../common/ui/parameterGroups.h"
 #include <cmath>
+namespace {
+constexpr ahq::ui::ParameterGroup uiGroups[]{
+    {"Grains", 0, 5}, {"Feedback and random", 5, 3}, {"Mix", 8, 1}};
+}
 
 GhostDelayEditor::GhostDelayEditor(GhostDelayProcessor &owner)
     : AudioProcessorEditor(owner), ComponentMovementWatcher(this), processor(owner),
       display(owner.getAnalysis()) {
     addAndMakeVisible(presetBar);
-    setSize(660, 816);
+    addAndMakeVisible(display.controls);
+    display.controls.onChange = [this] {
+        resized();
+        repaint();
+    };
+    setResizable(true, true);
+    setResizeLimits(1120, 900, 2000, 1500);
+    setSize(1280, 1000);
     constexpr std::array<const char *, 9> names{"Grain",      "Delay",          "Pitch",
                                                 "Scatter",    "Density",        "Feedback",
                                                 "Randomness", "Seed (integer)", "Wet mix"};
@@ -104,38 +116,32 @@ void GhostDelayEditor::timerCallback() {
     undoButton.setEnabled(processor.canUndo());
     redoButton.setEnabled(processor.canRedo());
     display.refresh(spectrumVisible);
-    repaint();
+    repaint(display.getSpectrumBounds().withTrimmedBottom(-58).toNearestInt());
 }
 
 void GhostDelayEditor::paint(juce::Graphics &graphics) {
     appearance.paintBackground(graphics, getWidth());
     graphics.setColour(juce::Colours::white);
-    graphics.setFont(22.0F);
-    graphics.drawText("AHQ Ghost Delay", 20, 12, 400, 32, juce::Justification::left);
-    graphics.setFont(14.0F);
-    graphics.setFont(12.0F);
-    graphics.drawText("Seed 0-65535 | Estimated decay below -80 dB: " +
-                          juce::String(processor.getTailLengthSeconds(), 1) + " s",
-                      20, 390, 620, 20, juce::Justification::left);
-    {
-        juce::Graphics::ScopedSaveState save(graphics);
-        graphics.addTransform(juce::AffineTransform::translation(0, 140));
-        display.paintMeters(graphics);
-        display.paintSpectrum(graphics);
-    }
+    graphics.setFont(juce::FontOptions(23));
+    graphics.drawText(processor.getName(), 20, 10, 370, 32, juce::Justification::left);
+    appearance.paintFlow(graphics, {20, 48, 620, 24},
+                         {"Input", "Grain processing + dry mix", "Output"});
+    ahq::ui::paintGroups(graphics, appearance, labels, sliders, uiGroups);
+    display.paintSpectrum(graphics);
+    display.paintMeters(graphics);
 }
 void GhostDelayEditor::resized() {
     presetBar.setBounds(0, getHeight() - ahq::ui::PresetBar::height, getWidth(),
                         ahq::ui::PresetBar::height);
-    undoButton.setBounds(440, 55, 90, 28);
-    redoButton.setBounds(550, 55, 90, 28);
-    for (int index = 0; index < 9; ++index) {
-        const bool first = index < 5;
-        const int x = 15 + (first ? index * 128 : (index - 5) * 160);
-        const int width = first ? 124 : 154;
-        const int y = first ? 96 : 242;
-        labels[size_t(index)].setBounds(x, y, width, 24);
-        sliders[size_t(index)].setBounds(x, y + 24, width, 113);
-    }
-    presets.setBounds(20, 475, 250, 28);
+    undoButton.setBounds(getWidth() - 188, 12, 76, 28);
+    redoButton.setBounds(getWidth() - 100, 12, 76, 28);
+    presets.setBounds(getWidth() - 460, 12, 250, 28);
+    display.controls.setBounds(20, 80, getWidth() - 40, 30);
+    const int rightWidth = juce::jmax(
+        320, int((getWidth() - 60) * (1 - display.controls.preferences.share.load() / 100.F)));
+    const int rightX = getWidth() - rightWidth - 20;
+    display.setSpectrumBounds({20, 122, float(rightX - 40), float(getHeight() - 122 - 154)});
+
+    ahq::ui::layoutGroups(labels, sliders, uiGroups,
+                          {rightX, 122, rightWidth, getHeight() - 122 - 104});
 }

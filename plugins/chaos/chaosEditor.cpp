@@ -1,11 +1,23 @@
 #include "chaosEditor.h"
+#include "../common/ui/parameterGroups.h"
 #include <cmath>
+namespace {
+constexpr ahq::ui::ParameterGroup uiGroups[]{
+    {"Slices", 0, 3}, {"Pitch and position", 3, 3}, {"Distortion", 6, 2}, {"Seed and mix", 8, 2}};
+}
 
 ChaosEditor::ChaosEditor(ChaosProcessor &owner)
     : AudioProcessorEditor(owner), ComponentMovementWatcher(this), processor(owner),
       display(owner.getAnalysis()) {
     addAndMakeVisible(presetBar);
-    setSize(660, 816);
+    addAndMakeVisible(display.controls);
+    display.controls.onChange = [this] {
+        resized();
+        repaint();
+    };
+    setResizable(true, true);
+    setResizeLimits(1120, 900, 2000, 1500);
+    setSize(1280, 1000);
     constexpr std::array<const char *, 10> names{
         "Slice",      "Probability", "Repeats",        "Reverse chance", "Pitch range",
         "Pan amount", "Drive",       "Distort chance", "Seed (integer)", "Wet mix"};
@@ -110,37 +122,32 @@ void ChaosEditor::timerCallback() {
     undoButton.setEnabled(processor.canUndo());
     redoButton.setEnabled(processor.canRedo());
     display.refresh(spectrumVisible);
-    repaint();
+    repaint(display.getSpectrumBounds().withTrimmedBottom(-58).toNearestInt());
 }
 
 void ChaosEditor::paint(juce::Graphics &graphics) {
     appearance.paintBackground(graphics, getWidth());
     graphics.setColour(juce::Colours::white);
-    graphics.setFont(22.0F);
-    graphics.drawText("AHQ Chaos", 20, 12, 400, 32, juce::Justification::left);
-    graphics.setFont(14.0F);
-    graphics.setFont(12.0F);
-    graphics.drawText("Past slices | Repeats and reverse | Creative pitch | No feedback", 20, 390,
-                      620, 20, juce::Justification::left);
-    {
-        juce::Graphics::ScopedSaveState save(graphics);
-        graphics.addTransform(juce::AffineTransform::translation(0, 140));
-        display.paintMeters(graphics);
-        display.paintSpectrum(graphics);
-    }
+    graphics.setFont(juce::FontOptions(23));
+    graphics.drawText(processor.getName(), 20, 10, 370, 32, juce::Justification::left);
+    appearance.paintFlow(graphics, {20, 48, 620, 24},
+                         {"Input", "Buffer processing + dry mix", "Output"});
+    ahq::ui::paintGroups(graphics, appearance, labels, sliders, uiGroups);
+    display.paintSpectrum(graphics);
+    display.paintMeters(graphics);
 }
 void ChaosEditor::resized() {
     presetBar.setBounds(0, getHeight() - ahq::ui::PresetBar::height, getWidth(),
                         ahq::ui::PresetBar::height);
-    undoButton.setBounds(440, 55, 90, 28);
-    redoButton.setBounds(550, 55, 90, 28);
-    for (int index = 0; index < 10; ++index) {
-        const bool first = index < 5;
-        const int x = 15 + (first ? index * 128 : (index - 5) * 128);
-        const int width = 124;
-        const int y = first ? 96 : 242;
-        labels[size_t(index)].setBounds(x, y, width, 24);
-        sliders[size_t(index)].setBounds(x, y + 24, width, 113);
-    }
-    presets.setBounds(20, 475, 250, 28);
+    undoButton.setBounds(getWidth() - 188, 12, 76, 28);
+    redoButton.setBounds(getWidth() - 100, 12, 76, 28);
+    presets.setBounds(getWidth() - 460, 12, 250, 28);
+    display.controls.setBounds(20, 80, getWidth() - 40, 30);
+    const int rightWidth = juce::jmax(
+        320, int((getWidth() - 60) * (1 - display.controls.preferences.share.load() / 100.F)));
+    const int rightX = getWidth() - rightWidth - 20;
+    display.setSpectrumBounds({20, 122, float(rightX - 40), float(getHeight() - 122 - 154)});
+
+    ahq::ui::layoutGroups(labels, sliders, uiGroups,
+                          {rightX, 122, rightWidth, getHeight() - 122 - 104});
 }

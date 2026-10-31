@@ -29,6 +29,9 @@ juce::String MasterScopeProcessor::createPresetXml() const {
     auto *view = xml->createNewChildElement("Display");
     view->setAttribute("spectrumGain", double(spectrumGainDb.load()));
     view->setAttribute("scopeGain", double(scopeGainDb.load()));
+    view->setAttribute("frequencySmoothing", spectrumFrequencySmoothing.load());
+    view->setAttribute("smoothingMs", double(spectrumSmoothingMs.load()));
+    view->setAttribute("spectrumShare", double(spectrumShare.load()));
     view->setAttribute("range", spectrumRange.load());
     view->setAttribute("style", displayStyle.load());
     view->setAttribute("theme", displayTheme.load());
@@ -78,6 +81,13 @@ bool MasterScopeProcessor::restorePresetXml(const juce::String &text, bool notif
     if (view) {
         spectrumGainDb.store(readGain("spectrumGain"));
         scopeGainDb.store(readGain("scopeGain"));
+        const double smoothing = view->getDoubleAttribute("smoothingMs", 140);
+        const double share = view->getDoubleAttribute("spectrumShare", 65);
+        spectrumFrequencySmoothing.store(
+            std::clamp(view->getIntAttribute("frequencySmoothing", 1), 0, 3));
+        spectrumSmoothingMs.store(
+            std::isfinite(smoothing) ? float(std::clamp(smoothing, 0.0, 600.0)) : 140.F);
+        spectrumShare.store(std::isfinite(share) ? float(std::clamp(share, 50.0, 75.0)) : 65.F);
         const int range = view->getIntAttribute("range", 90);
         spectrumRange.store(range == 60 || range == 120 ? range : 90);
         displayStyle.store(std::clamp(view->getIntAttribute("style", 1), 0, 2));

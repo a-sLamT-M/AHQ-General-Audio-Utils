@@ -4,6 +4,9 @@ add_library(ahq::plugin_ui ALIAS ahq_plugin_ui)
 target_compile_features(ahq_plugin_ui INTERFACE cxx_std_20)
 target_sources(ahq_plugin_ui INTERFACE
     ${CMAKE_CURRENT_SOURCE_DIR}/common/ui/pluginTheme.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/common/ui/parameterGroups.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/common/ui/spectrumControls.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/common/ui/spectrumPreferences.h
     ${CMAKE_CURRENT_SOURCE_DIR}/common/ui/presetLibrary.h
     ${CMAKE_CURRENT_SOURCE_DIR}/common/ui/presetBar.h)
 

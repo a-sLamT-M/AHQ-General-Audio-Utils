@@ -223,9 +223,21 @@ menu invocation and absence of unintended value changes.
 | Hybrid Reverb | Loaded/generated early IR plus an eight-line Hadamard feedback delay network; separate early/late level, decay, damping, width, predelay and mix. External IRs may be up to 12 seconds. |
 | Gated Reverb | Original finite 50–1500 ms nonlinear or reverse IR, brightness, predelay and mix. Inspired by finite nonlinear reverberation workflows; no original machine ROM. IR changes are generated in the background, so length/brightness/shape automation is asynchronous, not sample-accurate. |
 | Elevation | Fourteen front-median-plane SADIE II D1 responses from −90° to +90°, interpolated and sample-rate converted. Input becomes M=(L+R)/2 before spatialization. General dummy-head data cannot guarantee elevation perception for a particular listener. The source's −90° response is itself interpolated from −81°. |
-| Retro Tools | Three-voice ensemble, slow wow, fast flutter, rational waveshaping, low-pass tone and 4–24-bit quantization. Mix uses a fixed 12 ms aligned dry path. |
+| Retro Tools | Three-voice ensemble, slow wow, fast flutter, random speaker-fault breakup, rational waveshaping, low-pass tone and 4–24-bit quantization. Mix uses a fixed 12 ms aligned dry path. |
 | Modular | Four analog/wavetable/PCM/noise generators, up to three unison oscillators per generator, preceding-generator phase modulation, two envelopes, two LFOs, filter, eight modulation routes and drive/chorus/reverb. 32 original programs. |
 | PCM Station | Two generators, filter, two envelopes/LFOs, four modulation routes, 64 original programs and 16 combinations. Combination mode has eight factory-program parts with enable, MIDI channel, key range, transpose, level and pan. Program edits are saved in plugin state; combination parts reference factory programs, not a user program bank. |
+
+Retro Tools appends `fault` (0–1, default 0) after its original eight parameters. Fault
+combines irregular 18–65 Hz flutter, 25–180 ms changes in fault depth, signal-dependent
+soft clipping and amplitude collapse. It suggests an overloaded or failing speaker;
+it is a behavioural effect, not a calibrated circuit simulation. Fault lowers the
+clipping threshold and attenuates the wet signal without makeup gain. Existing Drive
+and Bits retain their separate behaviour; Fault is not an output limiter. Try Ensemble=0,
+Drive=0, Bits=24, Mix=1 and Fault=0.5–0.8 to isolate it, then blend with Mix.
+Fault modulation is stereo-linked, its amount and random targets are smoothed, and its
+seeded sequence repeats on reset independently of host buffer size. The original
+Flutter control remains the periodic tape effect. Old projects and presets missing
+`fault` restore with Fault=0, including when it was enabled before loading.
 
 The instruments use fixed storage for up to 64 active voices, defaulting to 32. Both
 consume sample-positioned MIDI, sustain, pitch bend, mod wheel and channel pressure.
@@ -307,3 +319,29 @@ in this run.
 SADIE data is distributed under Apache-2.0. Its original copyright, license,
 source hashes, extraction script and the −90° limitation are recorded in
 [sadieAttribution.md](../src/spatial/data/sadieAttribution.md).
+
+## Shared plugin UI
+
+The native `ahq::plugin_ui` theme draws the rotary controls and faders. Related
+parameters use rounded groups; flow diagrams describe the processor path rather
+than the order of controls on screen. Cabinet displays four parallel IR branches
+feeding its master fader. Output/master parameters keep their existing parameter
+IDs and host gestures when presented as faders.
+
+Editors with an existing spectrum use a shared display toolbar: line, filled or
+bar rendering; 0–600 ms time smoothing; raw, 1/12-, 1/6- or 1/3-octave frequency
+smoothing; display gain; and a requested 50–75% spectrum width. Minimum parameter
+panel widths take priority in small windows. Time smoothing uses elapsed UI time;
+frequency smoothing averages power over neighbouring FFT bins. These operations
+run on the message thread and do not change audio, latency or automation values.
+Non-spectral editors retain their relevant gain-history, envelope or position
+visualisations instead of adding an FFT to the audio path.
+
+Display preferences survive editor recreation within the same processor instance.
+Master Scope also saves its display settings with presets and host state; old
+states without the new optional attributes use their defaults. Other processors'
+new spectrum preferences are instance-local, not saved in project/preset XML.
+
+The existing plugin tests exercise minimum window bounds and both spectrum-area
+limits without changing audio parameters. Set `AHQ_UI_SNAPSHOT_DIR` to an existing
+folder when running them to export default, minimum-size and area-limit images.

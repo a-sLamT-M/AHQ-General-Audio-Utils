@@ -1,11 +1,22 @@
 #include "orbitEditor.h"
+#include "../common/ui/parameterGroups.h"
 #include <cmath>
+namespace {
+constexpr ahq::ui::ParameterGroup uiGroups[]{{"Timing", 0, 3}, {"Motion", 3, 2}, {"Mix", 5, 1}};
+}
 
 OrbitEditor::OrbitEditor(OrbitProcessor &owner)
     : AudioProcessorEditor(owner), ComponentMovementWatcher(this), processor(owner),
       display(owner.getAnalysis()) {
     addAndMakeVisible(presetBar);
-    setSize(660, 676);
+    addAndMakeVisible(display.controls);
+    display.controls.onChange = [this] {
+        resized();
+        repaint();
+    };
+    setResizable(true, true);
+    setResizeLimits(1120, 900, 2000, 1500);
+    setSize(1280, 1000);
     constexpr std::array<const char *, 6> names{"Rate",  "Manual BPM", "Beats / turn",
                                                 "Depth", "Phase",      "Wet mix"};
     constexpr std::array<const char *, 6> suffixes{" Hz", "", "", "", " deg", ""};
@@ -141,32 +152,34 @@ void OrbitEditor::timerCallback() {
     undoButton.setEnabled(processor.canUndo());
     redoButton.setEnabled(processor.canRedo());
     display.refresh(spectrumVisible);
-    repaint();
+    repaint(display.getSpectrumBounds().withTrimmedBottom(-58).toNearestInt());
 }
 
 void OrbitEditor::paint(juce::Graphics &graphics) {
     appearance.paintBackground(graphics, getWidth());
     graphics.setColour(juce::Colours::white);
-    graphics.setFont(22.0F);
-    graphics.drawText("AHQ Orbit", 20, 12, 210, 32, juce::Justification::left);
-    graphics.setFont(14.0F);
-    graphics.setFont(12.0F);
-    graphics.drawText("Headphones | Wet source: mono | Fixed KEMAR response", 20, 252, 620, 18,
-                      juce::Justification::left);
-    display.paintMeters(graphics);
+    graphics.setFont(juce::FontOptions(23));
+    graphics.drawText(processor.getName(), 20, 10, 370, 32, juce::Justification::left);
+    appearance.paintFlow(graphics, {20, 48, 620, 24},
+                         {"Input", "Orbit processing + mix", "Output"});
+    ahq::ui::paintGroups(graphics, appearance, labels, sliders, uiGroups);
     display.paintSpectrum(graphics);
+    display.paintMeters(graphics);
 }
 void OrbitEditor::resized() {
     presetBar.setBounds(0, getHeight() - ahq::ui::PresetBar::height, getWidth(),
                         ahq::ui::PresetBar::height);
-    undoButton.setBounds(440, 55, 90, 28);
-    redoButton.setBounds(550, 55, 90, 28);
-    speedMode.setBounds(20, 55, 160, 28);
-    direction.setBounds(195, 55, 225, 28);
-    tempoStatus.setBounds(235, 12, 405, 32);
-    for (int index = 0; index < 6; ++index) {
-        labels[size_t(index)].setBounds(10 + index * 107, 96, 105, 24);
-        sliders[size_t(index)].setBounds(10 + index * 107, 120, 105, 128);
-    }
-    presets.setBounds(20, 335, 250, 28);
+    undoButton.setBounds(getWidth() - 188, 12, 76, 28);
+    redoButton.setBounds(getWidth() - 100, 12, 76, 28);
+    presets.setBounds(getWidth() - 460, 12, 250, 28);
+    display.controls.setBounds(20, 80, getWidth() - 40, 30);
+    const int rightWidth = juce::jmax(
+        320, int((getWidth() - 60) * (1 - display.controls.preferences.share.load() / 100.F)));
+    const int rightX = getWidth() - rightWidth - 20;
+    display.setSpectrumBounds({20, 122, float(rightX - 40), float(getHeight() - 122 - 154)});
+    speedMode.setBounds(rightX, 120, rightWidth / 2 - 6, 28);
+    direction.setBounds(rightX + rightWidth / 2, 120, rightWidth / 2, 28);
+    tempoStatus.setBounds(660, 48, getWidth() - 680, 24);
+    ahq::ui::layoutGroups(labels, sliders, uiGroups,
+                          {rightX, 160, rightWidth, getHeight() - 160 - 104});
 }

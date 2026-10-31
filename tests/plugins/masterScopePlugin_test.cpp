@@ -149,6 +149,9 @@ bool testStateLayoutsAndOverflow() {
                "boolean controls reject fractional values without changing state");
     passed &= expect(p.applyUserValues({0, 0, 1}, "Controls"), "edit controls");
     const auto xml = p.createPresetXml();
+    p.spectrumFrequencySmoothing.store(2);
+    p.spectrumSmoothingMs.store(320.F);
+    p.spectrumShare.store(72.F);
     p.spectrumGainDb.store(12.F);
     p.scopeGainDb.store(-6.F);
     p.spectrumRange.store(120);
@@ -173,12 +176,14 @@ bool testStateLayoutsAndOverflow() {
     MasterScopeProcessor restored;
     restored.setStateInformation(saved.getData(), int(saved.getSize()));
     passed &= expect(restored.readValues() == p.readValues(), "all state values roundtrip");
-    passed &=
-        expect(restored.spectrumGainDb.load() == 12.F && restored.scopeGainDb.load() == -6.F &&
-                   restored.spectrumRange.load() == 120 && restored.displayStyle.load() == 1 &&
-                   restored.displayTheme.load() == 2 && restored.editorWidth.load() == 1300 &&
-                   restored.editorHeight.load() == 850,
-               "display controls and window dimensions roundtrip");
+    passed &= expect(
+        restored.spectrumFrequencySmoothing.load() == 2 &&
+            restored.spectrumSmoothingMs.load() == 320.F && restored.spectrumShare.load() == 72.F &&
+            restored.spectrumGainDb.load() == 12.F && restored.scopeGainDb.load() == -6.F &&
+            restored.spectrumRange.load() == 120 && restored.displayStyle.load() == 1 &&
+            restored.displayTheme.load() == 2 && restored.editorWidth.load() == 1300 &&
+            restored.editorHeight.load() == 850,
+        "display controls and window dimensions roundtrip");
     {
         restored.spectrumGainDb.store(0);
         restored.scopeGainDb.store(0);

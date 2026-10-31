@@ -1,6 +1,6 @@
 #include "analysisDisplay.h"
 #include <cmath>
-AnalysisDisplay::AnalysisDisplay(PluginAnalysis &a) : analysis(a) {
+AnalysisDisplay::AnalysisDisplay(PluginAnalysis &a) : controls(a.spectrumPreferences), analysis(a) {
     std::array<float, fftSize> unityWindow;
     unityWindow.fill(1);
     window.multiplyWithWindowingTable(unityWindow.data(), fftSize);
@@ -8,8 +8,14 @@ AnalysisDisplay::AnalysisDisplay(PluginAnalysis &a) : analysis(a) {
     for (float sample : unityWindow)
         windowSum += sample;
     spectrumDb.fill(-120);
+    smoothedSpectrumDb.fill(-120);
 }
 void AnalysisDisplay::refresh(bool spectrumVisible) {
+    const auto now = juce::Time::getMillisecondCounterHiRes();
+    const auto elapsed = lastRefreshMs > 0 ? std::clamp(now - lastRefreshMs, 1.0, 250.0) : 33.0;
+    lastRefreshMs = now;
+    const float ms = controls.preferences.smoothingMs.load();
+    smoothingAlpha = ms > 0 ? float(-std::expm1(-elapsed / ms)) : 1.F;
     const auto levels = analysis.readLevels();
     for (size_t index = 0; index < levels.size(); ++index)
         displayedLevels[index] = std::max(levels[index], displayedLevels[index] * 0.88F);
@@ -17,6 +23,27 @@ void AnalysisDisplay::refresh(bool spectrumVisible) {
         updateSpectrum();
 }
 void AnalysisDisplay::paintMeters(juce::Graphics &graphics) {
+    if (!spectrumBounds.isEmpty()) {
+        for (size_t i = 0; i < 2; ++i) {
+            const float db = juce::Decibels::gainToDecibels(displayedLevels[i], -60.F);
+            const float y = spectrumBounds.getBottom() + 10 + float(i) * 22;
+            graphics.setFont(juce::FontOptions(12));
+            graphics.setColour(juce::Colour(0xffc2ced5));
+            graphics.drawText(i == 0 ? "Input" : "Output", 20, int(y), 54, 20,
+                              juce::Justification::left);
+            const auto track =
+                juce::Rectangle<float>(80, y + 5, spectrumBounds.getWidth() - 150, 8);
+            graphics.setColour(juce::Colour(0xff10171c));
+            graphics.fillRoundedRectangle(track, 3);
+            graphics.setColour(db >= 0 ? juce::Colours::orangered : juce::Colour(0xff28ced1));
+            graphics.fillRoundedRectangle(
+                track.withWidth(track.getWidth() * juce::jlimit(0.F, 1.F, (db + 60) / 60)), 3);
+            graphics.setColour(juce::Colour(0xffc2ced5));
+            graphics.drawText(juce::String(db, 1) + " dBFS", int(track.getRight()) + 8, int(y), 72,
+                              20, juce::Justification::right);
+        }
+        return;
+    }
     graphics.setFont(14.0F);
     for (int index = 0; index < 2; ++index) {
         const float decibels =
@@ -40,6 +67,7 @@ void AnalysisDisplay::updateSpectrum() {
         displayedSampleRate = sampleRate;
         analysis.setSpectrumEnabled(true);
         spectrumDb.fill(-120);
+        smoothedSpectrumDb.fill(-120);
         return;
     }
     bool received = false;
@@ -60,20 +88,53 @@ void AnalysisDisplay::updateSpectrum() {
             const float right = fftRight[size_t(bin)] * 2 / windowSum;
             const float power = (left * left + right * right) * 0.5F;
             const float decibels = 10 * std::log10(std::max(power, 1.0e-12F));
-            spectrumDb[size_t(bin)] = std::max(decibels, spectrumDb[size_t(bin)] - 2);
+            spectrumDb[size_t(bin)] += smoothingAlpha * (decibels - spectrumDb[size_t(bin)]);
         }
     } else {
         for (auto &value : spectrumDb)
-            value = std::max(-120.0F, value - 2);
+            value += smoothingAlpha * (-120.0F - value);
+    }
+    const int mode = juce::jlimit(0, 3, controls.preferences.frequencySmoothing.load());
+    if (mode == 0) {
+        smoothedSpectrumDb = spectrumDb;
+    } else {
+        std::array<double, fftSize / 2 + 1> powerSum{};
+        for (size_t i = 0; i < spectrumDb.size(); ++i)
+            powerSum[i + 1] = powerSum[i] + std::pow(10.0, spectrumDb[i] / 10.0);
+        const double octaves[]{0, 1.0 / 12, 1.0 / 6, 1.0 / 3};
+        const double factor = std::pow(2.0, octaves[mode] * .5);
+        for (int i = 1; i < fftSize / 2; ++i) {
+            const int lo = juce::jmax(1, int(std::ceil(i / factor)));
+            const int hi = juce::jmin(fftSize / 2 - 1, int(std::floor(i * factor)));
+            const double power = (powerSum[size_t(hi + 1)] - powerSum[size_t(lo)]) / (hi - lo + 1);
+            smoothedSpectrumDb[size_t(i)] = float(10 * std::log10(std::max(1e-12, power)));
+        }
     }
 }
 
 void AnalysisDisplay::paintSpectrum(juce::Graphics &graphics) {
+    if (!spectrumBounds.isEmpty()) {
+        graphics.setColour(juce::Colour(0xff11191d));
+        graphics.fillRoundedRectangle(spectrumBounds, 8.F);
+        paintConfiguredSpectrum(graphics,
+                                spectrumBounds.withTrimmedLeft(44)
+                                    .withTrimmedRight(12)
+                                    .withTrimmedTop(18)
+                                    .withTrimmedBottom(30),
+                                juce::Colour(0xff28ced1));
+        return;
+    }
     graphics.setColour(juce::Colours::white);
     graphics.setFont(12.0F);
     graphics.drawText("Output spectrum (approximate L/R power average)", 20, 378, 620, 22,
                       juce::Justification::left);
     paintSpectrum(graphics, {65, 405, 550, 150}, 0, 90, 0, juce::Colours::lightblue);
+}
+
+void AnalysisDisplay::paintConfiguredSpectrum(juce::Graphics &g, juce::Rectangle<float> plot,
+                                              juce::Colour colour) {
+    paintSpectrum(g, plot, controls.preferences.gainDb.load(), 90,
+                  controls.preferences.style.load(), colour);
 }
 
 void AnalysisDisplay::paintSpectrum(juce::Graphics &graphics, juce::Rectangle<float> plot,
@@ -124,18 +185,20 @@ void AnalysisDisplay::paintSpectrum(juce::Graphics &graphics, juce::Rectangle<fl
                 line.lineTo(x, y);
             lastX = x;
             if (style == 2)
-                graphics.fillRect(x, y, 1.F, plot.getBottom() - y);
+                graphics.fillRect(x, y, 4.F, plot.getBottom() - y);
         };
         graphics.setColour(colour);
         for (int bin = 1; bin < fftSize / 2; ++bin) {
             const double hz = bin * displayedSampleRate / fftSize;
             if (hz < 20 || hz > maximumHz)
                 continue;
-            const int column = int(xFor(hz) - plot.getX());
+            const int pixel = int(xFor(hz) - plot.getX());
+            const int column = style == 2 ? (pixel / 6) * 6 : pixel;
             const float y =
                 plot.getBottom() -
                 plot.getHeight() *
-                    juce::jlimit(0.F, 1.F, (spectrumDb[size_t(bin)] + gainDb + rangeDb) / rangeDb);
+                    juce::jlimit(0.F, 1.F,
+                                 (smoothedSpectrumDb[size_t(bin)] + gainDb + rangeDb) / rangeDb);
             if (column != previousColumn) {
                 if (previousColumn >= 0)
                     point(previousColumn, columnTop);

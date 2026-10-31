@@ -27,7 +27,7 @@ Twenty-two audio plugins built with C++20 and JUCE. Windows supports VST3 and st
 | Hybrid Reverb | Convolution early reflections plus an eight-line feedback-network tail |
 | Gated Reverb | Finite nonlinear/reverse reverb, adjustable length, brightness and predelay |
 | Elevation | Headphone positioning from below to above using licensed SADIE II responses |
-| Retro Tools | Ensemble, wow/flutter, drive, tone and bit-depth reduction |
+| Retro Tools | Ensemble, wow/flutter, random speaker-fault breakup, drive, tone and bit-depth reduction |
 | Modular | Four analog/wavetable/PCM/noise generators, two envelopes, two LFOs, eight modulation routes and 32 original programs |
 | PCM Station | Two-oscillator PCM programs and eight-part layers/splits; 64 original programs and 16 combinations |
 

@@ -14,7 +14,9 @@ juce::String db(double amplitude) {
 juce::Rectangle<float> plotArea(juce::Graphics &g, juce::Rectangle<float> box,
                                 const juce::String &title) {
     g.setColour(juce::Colour(0xff11151b));
-    g.fillRect(box);
+    g.fillRoundedRectangle(box, 9.F);
+    g.setColour(juce::Colour(0xff47535b));
+    g.drawRoundedRectangle(box.reduced(.5F), 9.F, 1);
     g.setColour(juce::Colour(muted));
     g.setFont(13.F);
     g.drawText(title, box.toNearestInt().reduced(12, 6).withHeight(20), juce::Justification::left);
@@ -25,10 +27,31 @@ MasterScopeEditor::MasterScopeEditor(MasterScopeProcessor &p)
     : AudioProcessorEditor(p), ComponentMovementWatcher(this), processor(p),
       display(p.getAnalysis()) {
     addAndMakeVisible(presetBar);
+    addAndMakeVisible(display.controls);
+    auto &prefs = display.controls.preferences;
+    prefs.frequencySmoothing.store(p.spectrumFrequencySmoothing.load());
+    prefs.smoothingMs.store(p.spectrumSmoothingMs.load());
+    prefs.share.store(p.spectrumShare.load());
+    prefs.style.store(p.displayStyle.load());
+    prefs.gainDb.store(p.spectrumGainDb.load());
+    display.controls.synchronise();
+    display.controls.onChange = [this] {
+        auto &prefs = display.controls.preferences;
+        processor.spectrumFrequencySmoothing.store(prefs.frequencySmoothing.load());
+        processor.spectrumSmoothingMs.store(prefs.smoothingMs.load());
+        processor.spectrumShare.store(prefs.share.load());
+        processor.displayStyle.store(prefs.style.load());
+        processor.spectrumGainDb.store(prefs.gainDb.load());
+        resized();
+        repaint();
+    };
     for (auto *c : std::array<juce::Component *, 14>{
              &capture, &hold, &reset, &undo, &redo, &coordinates, &style, &range, &theme,
              &spectrumGain, &scopeGain, &spectrumGainLabel, &scopeGainLabel, &details})
         addAndMakeVisible(c);
+    style.setVisible(false);
+    spectrumGain.setVisible(false);
+    spectrumGainLabel.setVisible(false);
     coordinates.addItemList({"L/R phase", "M/S phase"}, 1);
     style.addItemList({"Lines", "Filled / dots", "Bars / dots"}, 1);
     range.addItemList({"60 dB range", "90 dB range", "120 dB range"}, 1);
@@ -156,25 +179,23 @@ void MasterScopeEditor::resized() {
     for (auto *c : std::array<juce::Component *, 5>{&capture, &hold, &reset, &undo, &redo})
         c->setBounds(row.removeFromLeft(90).reduced(0, 1).withTrimmedRight(8));
     coordinates.setBounds(row.removeFromLeft(140).withTrimmedRight(8));
-    style.setBounds(row.removeFromLeft(145).withTrimmedRight(8));
     range.setBounds(row.removeFromLeft(125).withTrimmedRight(8));
     theme.setBounds(row.withWidth(80));
-    const int half = (getWidth() - 52) / 2;
-    spectrumGainLabel.setBounds(20, 88, 110, 26);
-    spectrumGain.setBounds(130, 88, half - 110, 26);
-    scopeGainLabel.setBounds(32 + half, 88, 130, 26);
-    scopeGain.setBounds(162 + half, 88, half - 130, 26);
-    auto graphs = juce::Rectangle<float>(20, 208, float(getWidth() - 40),
-                                         float((getHeight() - ahq::ui::PresetBar::height) - 244));
-    const float leftWidth = std::floor(graphs.getWidth() * .66F);
-    const float upperHeight = std::floor(graphs.getHeight() * .60F);
-    spectrumBounds = {graphs.getX(), graphs.getY(), leftWidth - 6, upperHeight - 6};
-    phaseBounds = {graphs.getX() + leftWidth + 6, graphs.getY(), graphs.getWidth() - leftWidth - 6,
-                   upperHeight - 6};
-    waveformBounds = {graphs.getX(), graphs.getY() + upperHeight + 6, leftWidth - 6,
-                      graphs.getHeight() - upperHeight - 6};
-    historyBounds = {phaseBounds.getX(), waveformBounds.getY(), phaseBounds.getWidth(),
-                     waveformBounds.getHeight()};
+    display.controls.setBounds(20, 84, getWidth() - 40, 30);
+    // Phase gain is placed in its own panel, not mixed with audio output controls.
+    auto graphs = juce::Rectangle<float>(20, 218, float(getWidth() - 40),
+                                         float(getHeight() - ahq::ui::PresetBar::height - 254));
+    const float leftWidth = std::floor(graphs.getWidth() * processor.spectrumShare.load() / 100.F);
+    spectrumBounds = graphs.withWidth(leftWidth - 6);
+    auto side = graphs.withTrimmedLeft(leftWidth + 6);
+    const float cellHeight = (side.getHeight() - 16) / 3;
+    phaseBounds = side.withHeight(cellHeight);
+    waveformBounds = side.withY(side.getY() + cellHeight + 8).withHeight(cellHeight);
+    historyBounds = side.withY(side.getY() + 2 * (cellHeight + 8)).withHeight(cellHeight);
+    scopeGainLabel.setBounds(int(phaseBounds.getX()) + 8, int(phaseBounds.getY()) + 24, 88, 20);
+    scopeGainLabel.setText("View gain", juce::dontSendNotification);
+    scopeGain.setBounds(int(phaseBounds.getX()) + 96, int(phaseBounds.getY()) + 24,
+                        int(phaseBounds.getWidth()) - 106, 20);
 }
 void MasterScopeEditor::timerCallback() {
     const auto revision = processor.displayRevision.load();
@@ -185,6 +206,14 @@ void MasterScopeEditor::timerCallback() {
         style.setSelectedId(processor.displayStyle.load() + 1, juce::dontSendNotification);
         range.setSelectedId(processor.spectrumRange.load() / 30 - 1, juce::dontSendNotification);
         theme.setSelectedId(processor.displayTheme.load() + 1, juce::dontSendNotification);
+        auto &prefs = display.controls.preferences;
+        prefs.frequencySmoothing.store(processor.spectrumFrequencySmoothing.load());
+        prefs.smoothingMs.store(processor.spectrumSmoothingMs.load());
+        prefs.share.store(processor.spectrumShare.load());
+        prefs.style.store(processor.displayStyle.load());
+        prefs.gainDb.store(processor.spectrumGainDb.load());
+        display.controls.synchronise();
+        resized();
         setSize(processor.editorWidth.load(),
                 processor.editorHeight.load() + ahq::ui::PresetBar::height);
     }
@@ -222,7 +251,8 @@ void MasterScopeEditor::timerCallback() {
 void MasterScopeEditor::paintPhase(juce::Graphics &g, juce::Rectangle<float> box,
                                    juce::Colour colour) {
     auto area =
-        plotArea(g, box, coordinates.getSelectedId() == 2 ? "PHASE   S / M" : "PHASE   L / R");
+        plotArea(g, box, coordinates.getSelectedId() == 2 ? "PHASE   S / M" : "PHASE   L / R")
+            .withTrimmedTop(18);
     const auto size = std::min(area.getWidth(), area.getHeight());
     area = area.withSizeKeepingCentre(size, size);
     g.setColour(juce::Colour(0xff353e4a));
@@ -391,6 +421,8 @@ void MasterScopeEditor::paint(juce::Graphics &g) {
     g.drawText(metering.stereo.correlationValid ? juce::String(metering.stereo.correlation, 2)
                                                 : "--",
                getWidth() - 110, 181, 90, 18, juce::Justification::right);
+    appearance.paintFlow(g, {20, 198, float(getWidth() - 40), 18},
+                         {"Input", "Output (unchanged) / analysis tap", "Display only"});
     auto spectrumPlot = plotArea(g, spectrumBounds, "SPECTRUM   dBFS / Hz");
     display.paintSpectrum(g, spectrumPlot, processor.spectrumGainDb.load(),
                           float(processor.spectrumRange.load()), processor.displayStyle.load(),

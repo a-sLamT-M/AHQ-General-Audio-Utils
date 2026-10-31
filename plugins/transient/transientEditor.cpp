@@ -1,11 +1,22 @@
 #include "transientEditor.h"
+#include "../common/ui/parameterGroups.h"
 #include <cmath>
+namespace {
+constexpr ahq::ui::ParameterGroup uiGroups[]{{"Shape", 0, 2}, {"Detector", 2, 2}, {"Mix", 4, 1}};
+}
 
 TransientEditor::TransientEditor(TransientProcessor &owner)
     : AudioProcessorEditor(owner), ComponentMovementWatcher(this), processor(owner),
       display(owner.getAnalysis()) {
     addAndMakeVisible(presetBar);
-    setSize(660, 676);
+    addAndMakeVisible(display.controls);
+    display.controls.onChange = [this] {
+        resized();
+        repaint();
+    };
+    setResizable(true, true);
+    setResizeLimits(1120, 900, 2000, 1500);
+    setSize(1280, 1000);
     const std::array<const char *, 5> names{"Attack", "Sustain", "Sensitivity", "Time",
                                             "Wet mix (0-1)"};
     constexpr std::array<const char *, 5> suffixes{" dB", " dB", " dBFS", " ms", ""};
@@ -98,26 +109,32 @@ void TransientEditor::timerCallback() {
     undoButton.setEnabled(processor.canUndo());
     redoButton.setEnabled(processor.canRedo());
     display.refresh(spectrumVisible);
-    repaint();
+    repaint(display.getSpectrumBounds().withTrimmedBottom(-58).toNearestInt());
 }
 
 void TransientEditor::paint(juce::Graphics &graphics) {
     appearance.paintBackground(graphics, getWidth());
     graphics.setColour(juce::Colours::white);
-    graphics.setFont(22.0F);
-    graphics.drawText("AHQ Transient", 20, 12, 400, 32, juce::Justification::left);
-    graphics.setFont(14.0F);
-    display.paintMeters(graphics);
+    graphics.setFont(juce::FontOptions(23));
+    graphics.drawText(processor.getName(), 20, 10, 370, 32, juce::Justification::left);
+    appearance.paintFlow(graphics, {20, 48, 620, 24},
+                         {"Input", "Transient processing + mix", "Output"});
+    ahq::ui::paintGroups(graphics, appearance, labels, sliders, uiGroups);
     display.paintSpectrum(graphics);
+    display.paintMeters(graphics);
 }
 void TransientEditor::resized() {
     presetBar.setBounds(0, getHeight() - ahq::ui::PresetBar::height, getWidth(),
                         ahq::ui::PresetBar::height);
-    undoButton.setBounds(440, 55, 90, 28);
-    redoButton.setBounds(550, 55, 90, 28);
-    for (int index = 0; index < 5; ++index) {
-        labels[size_t(index)].setBounds(15 + index * 128, 96, 124, 24);
-        sliders[size_t(index)].setBounds(15 + index * 128, 120, 124, 145);
-    }
-    presets.setBounds(20, 335, 250, 28);
+    undoButton.setBounds(getWidth() - 188, 12, 76, 28);
+    redoButton.setBounds(getWidth() - 100, 12, 76, 28);
+    presets.setBounds(getWidth() - 460, 12, 250, 28);
+    display.controls.setBounds(20, 80, getWidth() - 40, 30);
+    const int rightWidth = juce::jmax(
+        320, int((getWidth() - 60) * (1 - display.controls.preferences.share.load() / 100.F)));
+    const int rightX = getWidth() - rightWidth - 20;
+    display.setSpectrumBounds({20, 122, float(rightX - 40), float(getHeight() - 122 - 154)});
+
+    ahq::ui::layoutGroups(labels, sliders, uiGroups,
+                          {rightX, 122, rightWidth, getHeight() - 122 - 104});
 }

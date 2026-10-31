@@ -1,4 +1,5 @@
 #include "trueLimiterEditor.h"
+#include "../common/ui/parameterGroups.h"
 #include <cmath>
 
 namespace {
@@ -11,7 +12,14 @@ TrueLimiterEditor::TrueLimiterEditor(TrueLimiterProcessor &owner)
     : AudioProcessorEditor(owner), ComponentMovementWatcher(this), processor(owner),
       display(owner.getAnalysis()) {
     addAndMakeVisible(presetBar);
-    setSize(720, 1046);
+    addAndMakeVisible(display.controls);
+    display.controls.onChange = [this] {
+        resized();
+        repaint();
+    };
+    setResizable(true, true);
+    setResizeLimits(1200, 1000, 2000, 1600);
+    setSize(1380, 1100);
     constexpr std::array<const char *, 6> names{"Peak ceiling", "Target LUFS",
                                                 "Input gain",   "Lookahead",
                                                 "Release",      "Mix before protection"};
@@ -163,42 +171,50 @@ void TrueLimiterEditor::timerCallback() {
     else if (analysis.error.isNotEmpty())
         result.setText(analysis.error, juce::dontSendNotification);
     display.refresh(spectrumVisible);
-    repaint();
+    repaint(display.getSpectrumBounds().withTrimmedBottom(-58).toNearestInt());
 }
 void TrueLimiterEditor::paint(juce::Graphics &g) {
     appearance.paintBackground(g, getWidth());
     g.setColour(juce::Colours::white);
-    g.setFont(juce::FontOptions(23.0F));
+    g.setFont(juce::FontOptions(23));
     g.drawText("AHQ True Limiter", 20, 12, 450, 32, juce::Justification::left);
-    {
-        juce::Graphics::ScopedSaveState saved(g);
-        g.addTransform(juce::AffineTransform::translation(20, 402));
-        display.paintMeters(g);
-    }
-    {
-        juce::Graphics::ScopedSaveState saved(g);
-        g.addTransform(juce::AffineTransform::translation(20, 372));
-        display.paintSpectrum(g);
-    }
+    appearance.paintFlow(g, {20, 48, 650, 24},
+                         {"Input gain", "Limiter + mix", "Peak protection", "Output"});
+    const ahq::ui::ParameterGroup groups[]{
+        {"Targets", 0, 2}, {"Input gain", 2, 1}, {"Timing", 3, 2}, {"Mix", 5, 1}};
+    ahq::ui::paintGroups(g, appearance, labels, sliders, groups);
+    appearance.paintGroup(g,
+                          result.getBounds()
+                              .getUnion(analyze.getBounds())
+                              .getUnion(notice.getBounds())
+                              .expanded(8)
+                              .toFloat(),
+                          "");
+    display.paintSpectrum(g);
+    display.paintMeters(g);
 }
 void TrueLimiterEditor::resized() {
     presetBar.setBounds(0, getHeight() - ahq::ui::PresetBar::height, getWidth(),
                         ahq::ui::PresetBar::height);
-    undo.setBounds(510, 16, 85, 28);
-    redo.setBounds(610, 16, 85, 28);
-    live.setBounds(20, 55, 220, 28);
-    quality.setBounds(290, 55, 140, 28);
-    for (size_t i = 0; i < sliders.size(); ++i) {
-        const int x = 20 + static_cast<int>(i % 3) * 232, y = 100 + static_cast<int>(i / 3) * 150;
-        labels[i].setBounds(x, y, 220, 22);
-        sliders[i].setBounds(x, y + 22, 220, 120);
-    }
-    meters.setBounds(20, 398, 680, 50);
-    notice.setBounds(20, 451, 680, 65);
-    analyze.setBounds(20, 530, 220, 28);
-    cancel.setBounds(260, 530, 100, 28);
-    apply.setBounds(380, 530, 170, 28);
-    result.setBounds(20, 565, 680, 95);
+    undo.setBounds(getWidth() - 188, 12, 76, 28);
+    redo.setBounds(getWidth() - 100, 12, 76, 28);
+    live.setBounds(getWidth() - 460, 12, 150, 28);
+    quality.setBounds(getWidth() - 300, 12, 100, 28);
+    display.controls.setBounds(20, 80, getWidth() - 40, 30);
+    const int w = juce::jmax(
+        400, int((getWidth() - 60) * (1 - display.controls.preferences.share.load() / 100.F)));
+    const int x = getWidth() - w - 20;
+    display.setSpectrumBounds({20, 122, float(x - 40), float(getHeight() - 276)});
+    const ahq::ui::ParameterGroup groups[]{
+        {"Targets", 0, 2}, {"Input gain", 2, 1}, {"Timing", 3, 2}, {"Mix", 5, 1}};
+    ahq::ui::layoutGroups(labels, sliders, groups, {x, 122, w, getHeight() - 490});
+    const int y = getHeight() - 356;
+    meters.setBounds(x, y, w, 44);
+    notice.setBounds(x, y + 48, w, 62);
+    analyze.setBounds(x, y + 116, w / 2 - 4, 28);
+    cancel.setBounds(x + w / 2, y + 116, w / 2, 28);
+    apply.setBounds(x, y + 150, w, 28);
+    result.setBounds(x, y + 182, w, 68);
 }
 void TrueLimiterEditor::chooseAudio() {
     if (chooser)

@@ -1,11 +1,22 @@
 #include "saturatorEditor.h"
+#include "../common/ui/parameterGroups.h"
 #include <cmath>
+namespace {
+constexpr ahq::ui::ParameterGroup uiGroups[]{{"Drive and bias", 0, 2}, {"Tone and mix", 2, 2}};
+}
 
 SaturatorEditor::SaturatorEditor(SaturatorProcessor &owner)
     : AudioProcessorEditor(owner), ComponentMovementWatcher(this), processor(owner),
       display(owner.getAnalysis()) {
     addAndMakeVisible(presetBar);
-    setSize(660, 676);
+    addAndMakeVisible(display.controls);
+    display.controls.onChange = [this] {
+        resized();
+        repaint();
+    };
+    setResizable(true, true);
+    setResizeLimits(1120, 900, 2000, 1500);
+    setSize(1280, 1000);
     constexpr std::array<const char *, 4> names{"Drive", "Bias", "Tone", "Wet mix (0-1)"};
     constexpr std::array<const char *, 4> suffixes{" dB", "", "", ""};
     constexpr std::array<int, 4> indices{1, 2, 3, 5};
@@ -128,32 +139,33 @@ void SaturatorEditor::timerCallback() {
     undoButton.setEnabled(processor.canUndo());
     redoButton.setEnabled(processor.canRedo());
     display.refresh(spectrumVisible);
-    repaint();
+    repaint(display.getSpectrumBounds().withTrimmedBottom(-58).toNearestInt());
 }
 
 void SaturatorEditor::paint(juce::Graphics &graphics) {
     appearance.paintBackground(graphics, getWidth());
     graphics.setColour(juce::Colours::white);
-    graphics.setFont(22.0F);
-    graphics.drawText("AHQ Saturator", 20, 12, 400, 32, juce::Justification::left);
-    graphics.setFont(14.0F);
-    graphics.setFont(11.0F);
-    graphics.drawText(
-        "Digital curves; asymmetric shaping may add DC. Oversampling reduces some aliases.", 20,
-        255, 620, 18, juce::Justification::left);
-    display.paintMeters(graphics);
+    graphics.setFont(juce::FontOptions(23));
+    graphics.drawText(processor.getName(), 20, 10, 370, 32, juce::Justification::left);
+    appearance.paintFlow(graphics, {20, 48, 620, 24},
+                         {"Input", "Saturator processing + mix", "Output"});
+    ahq::ui::paintGroups(graphics, appearance, labels, sliders, uiGroups);
     display.paintSpectrum(graphics);
+    display.paintMeters(graphics);
 }
 void SaturatorEditor::resized() {
     presetBar.setBounds(0, getHeight() - ahq::ui::PresetBar::height, getWidth(),
                         ahq::ui::PresetBar::height);
-    undoButton.setBounds(440, 55, 90, 28);
-    redoButton.setBounds(550, 55, 90, 28);
-    model.setBounds(20, 55, 245, 28);
-    quality.setBounds(280, 55, 140, 28);
-    for (int index = 0; index < 4; ++index) {
-        labels[size_t(index)].setBounds(15 + index * 160, 96, 154, 24);
-        sliders[size_t(index)].setBounds(15 + index * 160, 120, 154, 132);
-    }
-    presets.setBounds(20, 335, 250, 28);
+    undoButton.setBounds(getWidth() - 188, 12, 76, 28);
+    redoButton.setBounds(getWidth() - 100, 12, 76, 28);
+    presets.setBounds(getWidth() - 460, 12, 250, 28);
+    display.controls.setBounds(20, 80, getWidth() - 40, 30);
+    const int rightWidth = juce::jmax(
+        320, int((getWidth() - 60) * (1 - display.controls.preferences.share.load() / 100.F)));
+    const int rightX = getWidth() - rightWidth - 20;
+    display.setSpectrumBounds({20, 122, float(rightX - 40), float(getHeight() - 122 - 154)});
+    model.setBounds(rightX, 120, rightWidth * 3 / 5 - 6, 28);
+    quality.setBounds(rightX + rightWidth * 3 / 5, 120, rightWidth * 2 / 5, 28);
+    ahq::ui::layoutGroups(labels, sliders, uiGroups,
+                          {rightX, 160, rightWidth, getHeight() - 160 - 104});
 }

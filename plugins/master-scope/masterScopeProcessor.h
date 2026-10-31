@@ -55,8 +55,10 @@ class MasterScopeProcessor final : public juce::AudioProcessor {
     void getStateInformation(juce::MemoryBlock &) override;
     void setStateInformation(const void *, int) override;
     // UI-only settings. Atomics allow host state capture independently of painting.
-    std::atomic<float> spectrumGainDb{0}, scopeGainDb{0};
-    std::atomic<int> spectrumRange{90}, displayStyle{1}, displayTheme{0};
+    std::atomic<float> spectrumGainDb{0}, scopeGainDb{0}, spectrumSmoothingMs{140},
+        spectrumShare{65};
+    std::atomic<int> spectrumRange{90}, displayStyle{1}, displayTheme{0},
+        spectrumFrequencySmoothing{1};
     std::atomic<unsigned> displayRevision{0};
     std::atomic<int> editorWidth{1180}, editorHeight{780};
     Values readValues() const noexcept;

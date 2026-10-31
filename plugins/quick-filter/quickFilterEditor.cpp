@@ -1,11 +1,19 @@
 #include "quickFilterEditor.h"
+#include "../common/ui/parameterGroups.h"
 #include <cmath>
 
 QuickFilterEditor::QuickFilterEditor(QuickFilterProcessor &owner)
     : AudioProcessorEditor(owner), ComponentMovementWatcher(this), processor(owner),
       display(owner.getAnalysis()) {
     addAndMakeVisible(presetBar);
-    setSize(660, 676);
+    addAndMakeVisible(display.controls);
+    display.controls.onChange = [this] {
+        resized();
+        repaint();
+    };
+    setResizable(true, true);
+    setResizeLimits(1120, 850, 2000, 1500);
+    setSize(1280, 940);
     configureSlider(frequency, 1, " Hz");
     frequency.setSkewFactorFromMidPoint(1000);
     configureSlider(q, 2, "");
@@ -121,7 +129,7 @@ void QuickFilterEditor::timerCallback() {
     undoButton.setEnabled(processor.canUndo());
     redoButton.setEnabled(processor.canRedo());
     display.refresh(spectrumVisible);
-    repaint();
+    repaint(display.getSpectrumBounds().withTrimmedBottom(-58).toNearestInt());
 }
 
 void QuickFilterEditor::paint(juce::Graphics &graphics) {
@@ -130,21 +138,29 @@ void QuickFilterEditor::paint(juce::Graphics &graphics) {
     graphics.setFont(22.0F);
     graphics.drawText("AHQ Quick Filter", 20, 12, 400, 32, juce::Justification::left);
     graphics.setFont(14.0F);
+    appearance.paintFlow(graphics, {20, 48, 620, 24}, {"Input", "Filter + dry / wet", "Output"});
+    std::array<juce::Label *, 3> names{&frequencyLabel, &qLabel, &mixLabel};
+    std::array<juce::Slider *, 3> controls{&frequency, &q, &mix};
+    const ahq::ui::ParameterGroup groups[]{{"Filter", 0, 2}, {"Mix", 2, 1}};
+    ahq::ui::paintGroups(graphics, appearance, names, controls, groups);
     display.paintMeters(graphics);
     display.paintSpectrum(graphics);
 }
 void QuickFilterEditor::resized() {
     presetBar.setBounds(0, getHeight() - ahq::ui::PresetBar::height, getWidth(),
                         ahq::ui::PresetBar::height);
-    mode.setBounds(20, 55, 190, 28);
-    slope.setBounds(230, 55, 190, 28);
-    undoButton.setBounds(440, 55, 90, 28);
-    redoButton.setBounds(550, 55, 90, 28);
-    frequencyLabel.setBounds(20, 96, 190, 24);
-    qLabel.setBounds(230, 96, 190, 24);
-    mixLabel.setBounds(440, 96, 200, 24);
-    frequency.setBounds(20, 120, 190, 145);
-    q.setBounds(230, 120, 190, 145);
-    mix.setBounds(440, 120, 200, 145);
-    presets.setBounds(20, 335, 250, 28);
+    undoButton.setBounds(getWidth() - 188, 12, 76, 28);
+    redoButton.setBounds(getWidth() - 100, 12, 76, 28);
+    presets.setBounds(getWidth() - 460, 12, 250, 28);
+    display.controls.setBounds(20, 80, getWidth() - 40, 30);
+    const int width = juce::jmax(
+        320, int((getWidth() - 60) * (1 - display.controls.preferences.share.load() / 100.F)));
+    const int x = getWidth() - width - 20;
+    display.setSpectrumBounds({20, 122, float(x - 40), float(getHeight() - 276)});
+    mode.setBounds(x, 122, width / 2 - 4, 28);
+    slope.setBounds(x + width / 2, 122, width / 2, 28);
+    std::array<juce::Label *, 3> names{&frequencyLabel, &qLabel, &mixLabel};
+    std::array<juce::Slider *, 3> controls{&frequency, &q, &mix};
+    const ahq::ui::ParameterGroup groups[]{{"Filter", 0, 2}, {"Mix", 2, 1}};
+    ahq::ui::layoutGroups(names, controls, groups, {x, 164, width, getHeight() - 270});
 }

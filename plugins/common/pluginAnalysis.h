@@ -1,4 +1,5 @@
 #pragma once
+#include "ui/spectrumPreferences.h"
 #include <array>
 #include <atomic>
 #include <juce_audio_basics/juce_audio_basics.h>
@@ -6,6 +7,7 @@
 /// Fixed SPSC transport: audio producer, one message-thread consumer. No shared FIFO reset.
 class PluginAnalysis {
   public:
+    ahq::ui::SpectrumPreferences spectrumPreferences;
     static float peak(const juce::AudioBuffer<float> &) noexcept;
     void prepare(double) noexcept;
     void publish(const juce::AudioBuffer<float> &, float inputPeak) noexcept;
