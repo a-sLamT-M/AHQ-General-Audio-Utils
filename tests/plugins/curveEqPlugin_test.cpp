@@ -5,6 +5,51 @@
 #include <cmath>
 #include <numbers>
 namespace {
+bool testBandMenuPosition() {
+    CurveEqProcessor processor;
+    auto values = processor.readValues();
+    values[0] = 1;
+    processor.applyUserValues(values, "Menu position test");
+    std::unique_ptr<CurveEqEditor> editor(
+        static_cast<CurveEqEditor *>(processor.createEditorAndMakeActive()));
+    editor->setSize(1120, 760);
+    editor->addToDesktop(juce::ComponentPeer::windowIsTemporary);
+    editor->setVisible(true);
+    bool passed = true;
+    for (float scale : {1.F, 1.25F}) {
+        editor->setScaleFactor(scale);
+        editor->setTopLeftPosition(70, 50);
+        const juce::Point<float> position{62 + float(editor->getWidth() - 124) *
+                                                   float(std::log(50.) / std::log(1000.)),
+                                          146 + float(editor->getHeight() - 270) * .5F};
+        const juce::MouseEvent event(juce::Desktop::getInstance().getMainMouseSource(), position,
+                                     juce::ModifierKeys(juce::ModifierKeys::rightButtonModifier), 1,
+                                     0, 0, 0, 0, editor.get(), editor.get(),
+                                     juce::Time::getCurrentTime(), position,
+                                     juce::Time::getCurrentTime(), 1, false);
+        editor->mouseDown(event);
+        bool nearClick = false;
+        auto &desktop = juce::Desktop::getInstance();
+        for (int i = 0; i < desktop.getNumComponents(); ++i) {
+            auto *component = desktop.getComponent(i);
+            if (component->getName() == "menu" && component->isShowing()) {
+                const auto bounds = component->getScreenBounds();
+                std::cout << "Band menu at scale " << scale << ": click "
+                          << event.getScreenPosition().toString() << ", bounds "
+                          << bounds.toString() << '\n';
+                nearClick |= bounds.expanded(16).contains(event.getScreenPosition());
+            }
+        }
+        if (!nearClick)
+            std::cerr << "FAILED: band menu opens beside the right-click position\n";
+        passed &= nearClick && processor.readValues() == values;
+        juce::PopupMenu::dismissAllActiveMenus();
+    }
+    editor->setVisible(false);
+    editor->removeFromDesktop();
+    processor.editorBeingDeleted(editor.get());
+    return passed;
+}
 bool testGraphEditing() {
     CurveEqProcessor processor;
     processor.prepareToPlay(48000, 256);
@@ -156,6 +201,7 @@ int main(int argc, char **argv) {
     if (!testUserPresetLibrary<CurveEqProcessor>())
         return 1;
     bool passed = testGraphEditing();
+    passed &= testBandMenuPosition();
     auto check = [&](bool condition, const char *name) {
         if (!condition)
             std::cerr << "FAILED: " << name << '\n';

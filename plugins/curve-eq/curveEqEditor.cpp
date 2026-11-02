@@ -477,7 +477,7 @@ void CurveEqEditor::mouseDown(const juce::MouseEvent &e) {
         } else
             selectBand(found, command || selectedBands[size_t(found)]);
         if (e.mods.isPopupMenu()) {
-            showBandMenu(found);
+            showBandMenu(found, e.getScreenPosition());
             return;
         }
         if (e.mods.isAltDown()) {
@@ -697,7 +697,7 @@ bool CurveEqEditor::keyPressed(const juce::KeyPress &key) {
     }
     return false;
 }
-void CurveEqEditor::showBandMenu(int index) {
+void CurveEqEditor::showBandMenu(int index, juce::Point<int> screenPosition) {
     const auto values = processor.readValues();
     const auto base = size_t(index) * CurveEqProcessor::fields;
     juce::PopupMenu menu, shapes, channelModes, slopes;
@@ -717,7 +717,9 @@ void CurveEqEditor::showBandMenu(int index) {
     menu.addItem(4, "Delete selected bands");
     menu.addItem(5, "Host automation", getHostContext() != nullptr);
     const juce::Component::SafePointer<CurveEqEditor> safe(this);
-    menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(this),
+    // Retain the target's DPI scale, but anchor to the click rather than the whole editor.
+    menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(this).withTargetScreenArea(
+                           {screenPosition.x, screenPosition.y, 1, 1}),
                        [safe, base](int result) {
                            if (safe == nullptr || result == 0)
                                return;

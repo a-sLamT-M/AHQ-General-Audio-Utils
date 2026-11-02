@@ -36,7 +36,7 @@ class CurveEqEditor final : public juce::AudioProcessorEditor,
     void beginNodeDrag(juce::Point<float>);
     void finishNodeDrag();
     void deleteSelectedBands();
-    void showBandMenu(int);
+    void showBandMenu(int, juce::Point<int> screenPosition);
     void rebuildResponse();
     float xFor(double) const;
     double frequencyFor(float) const;
